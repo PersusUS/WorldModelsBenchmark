@@ -1,0 +1,156 @@
+"""Tests for src/benchmark/metrics.py (PF, RD, WMF, FT)."""
+import copy
+
+import pytest
+import torch
+
+from src.benchmark.metrics import (
+    compute_ft,
+    compute_nll,
+    compute_pf,
+    compute_rd,
+    compute_wmf,
+)
+from src.models.rssm import RSSM
+
+from conftest import LATENT_DIM, HIDDEN_DIM, ACTION_DIM
+
+
+@pytest.fixture
+def model():
+    return RSSM(latent_dim=LATENT_DIM, hidden_dim=HIDDEN_DIM,
+                action_dim=ACTION_DIM)
+
+
+# --- WMF -------------------------------------------------------------------
+
+def test_wmf_rejects_weights_that_do_not_sum_to_one():
+    with pytest.raises(ValueError, match="sum to 1.0"):
+        compute_wmf([1.0], [1.0], [1.0], alpha=0.5, beta=0.5, gamma=0.5)
+
+
+def test_wmf_accepts_default_weights():
+    assert compute_wmf([1.0], [1.0], [1.0]) == pytest.approx(1.0)
+
+
+def test_wmf_empty_lists_return_zero():
+    assert compute_wmf([], [], []) == 0.0
+
+
+def test_wmf_is_weighted_mean_over_tasks():
+    # alpha*PF + beta*RD + gamma*PIS, averaged over the 2 entries
+    wmf = compute_wmf([1.0, 3.0], [0.0, 0.0], [0.0, 0.0],
+                      alpha=0.4, beta=0.4, gamma=0.2)
+    assert wmf == pytest.approx(0.4 * 2.0)
+
+
+def test_wmf_gamma_weights_pis():
+    wmf = compute_wmf([0.0], [0.0], [5.0], alpha=0.4, beta=0.4, gamma=0.2)
+    assert wmf == pytest.approx(1.0)
+
+
+# --- PF / NLL --------------------------------------------------------------
+
+def test_nll_is_finite_scalar(model, latent_dataset, device):
+    nll = compute_nll(model, latent_dataset, device)
+    assert isinstance(nll, float)
+    assert torch.isfinite(torch.tensor(nll))
+
+
+def test_nll_requires_the_next_state_target(model, latent_dataset, device):
+    """NLL is -log P(z'|z, a); without z' there is nothing to score against."""
+    del latent_dataset["next_obs"]
+    with pytest.raises(KeyError, match="next_obs"):
+        compute_nll(model, latent_dataset, device)
+
+
+def test_nll_is_scored_against_next_obs_not_obs(model, latent_dataset, device):
+    """Changing only the target must change the NLL."""
+    baseline = compute_nll(model, latent_dataset, device)
+    latent_dataset["next_obs"] = latent_dataset["next_obs"] + 3.0
+    assert compute_nll(model, latent_dataset, device) != pytest.approx(baseline)
+
+
+def test_pf_is_zero_for_identical_models(model, latent_dataset, device):
+    """No forgetting can be measured between a model and a copy of itself."""
+    twin = copy.deepcopy(model)
+    assert compute_pf(model, twin, latent_dataset, device) == pytest.approx(0.0, abs=1e-5)
+
+
+def test_pf_is_positive_when_second_model_is_worse(model, latent_dataset, device):
+    """PF(i, k) = NLL(M_k, D_i) - NLL(M_i, D_i); a degraded M_k must score higher."""
+    degraded = copy.deepcopy(model)
+    with torch.no_grad():
+        for param in degraded.parameters():
+            param.add_(torch.randn_like(param) * 0.5)
+
+    pf = compute_pf(model, degraded, latent_dataset, device)
+    assert pf > 0.0
+
+
+def test_pf_is_antisymmetric(model, latent_dataset, device):
+    other = copy.deepcopy(model)
+    with torch.no_grad():
+        for param in other.parameters():
+            param.add_(torch.randn_like(param) * 0.1)
+
+    forward = compute_pf(model, other, latent_dataset, device)
+    backward = compute_pf(other, model, latent_dataset, device)
+    assert forward == pytest.approx(-backward, abs=1e-4)
+
+
+# --- RD --------------------------------------------------------------------
+
+def test_rd_is_zero_for_identical_models(model, latent_dataset):
+    twin = copy.deepcopy(model)
+    rd = compute_rd(model, twin, latent_dataset, horizon=3, n_samples=8)
+    assert rd == pytest.approx(0.0, abs=1e-5)
+
+
+def test_rd_is_non_negative_and_finite(model, latent_dataset):
+    other = copy.deepcopy(model)
+    with torch.no_grad():
+        for param in other.parameters():
+            param.add_(torch.randn_like(param) * 0.1)
+
+    rd = compute_rd(model, other, latent_dataset, horizon=3, n_samples=8)
+    assert rd >= 0.0
+    assert torch.isfinite(torch.tensor(rd))
+
+
+def test_rd_rolls_out_with_actions_from_the_dataset(model, latent_dataset):
+    """Rollout actions must be drawn from the task's own action distribution;
+    Gaussian noise is off-manifold for bounded and for one-hot action spaces."""
+    latent_dataset["actions"] = torch.full((16, ACTION_DIM), 7.0)
+    captured = []
+    original = model.transition
+
+    def spy(h, z, a):
+        captured.append(a.clone())
+        return original(h, z, a)
+
+    model.transition = spy
+    compute_rd(model, copy.deepcopy(model), latent_dataset,
+               horizon=2, n_samples=4)
+    model.transition = original
+
+    assert captured, "transition was never called"
+    assert all(torch.all(a == 7.0) for a in captured)
+
+
+def test_rd_respects_n_samples_cap(model, latent_dataset):
+    """n_samples larger than the dataset must not raise."""
+    rd = compute_rd(model, copy.deepcopy(model), latent_dataset,
+                    horizon=2, n_samples=10_000)
+    assert torch.isfinite(torch.tensor(rd))
+
+
+# --- FT --------------------------------------------------------------------
+
+def test_ft_positive_when_prior_knowledge_helps():
+    """FT = nll_random - nll_before; positive means the pretrained model is better."""
+    assert compute_ft(nll_before=1.0, nll_random=5.0) == pytest.approx(4.0)
+
+
+def test_ft_negative_when_prior_knowledge_hurts():
+    assert compute_ft(nll_before=5.0, nll_random=1.0) == pytest.approx(-4.0)

@@ -1,0 +1,21 @@
+name: cf_worldmodels
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    # The +cu121 wheels are not on PyPI; this index is required to resolve them.
+    - --extra-index-url https://download.pytorch.org/whl/cu121
+    - torch==2.1.2+cu121
+    - gymnasium==0.29.1
+    - mujoco==3.1.1
+    - dm_control==1.0.16
+    - minigrid==2.3.1
+    - omegaconf==2.3.0
+    - wandb==0.16.3
+    - numpy==1.26.4
+    - Pillow==10.2.0
+    - tqdm==4.66.2
+    - matplotlib==3.8.2
+    - pytest==8.0.1

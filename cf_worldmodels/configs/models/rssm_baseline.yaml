@@ -1,0 +1,5 @@
+model:
+  latent_dim: 32
+  hidden_dim: 512
+  action_dim: 6
+  beta_kl: 1.0

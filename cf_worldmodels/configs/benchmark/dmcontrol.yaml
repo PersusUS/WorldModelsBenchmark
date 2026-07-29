@@ -1,0 +1,45 @@
+benchmark:
+  family: "dmcontrol"
+  sequences:
+    distance_min:
+      task_A:
+        domain_name: "cheetah"
+        task_name: "run"
+        params: {}
+      task_B:
+        domain_name: "cheetah"
+        task_name: "run"
+        params:
+          lateral_wind: true
+    distance_med:
+      task_A:
+        domain_name: "cheetah"
+        task_name: "run"
+        params: {}
+      task_B:
+        domain_name: "walker"
+        task_name: "run"
+        params: {}
+    distance_max:
+      task_A:
+        domain_name: "cheetah"
+        task_name: "run"
+        params: {}
+      task_B:
+        domain_name: "reacher"
+        task_name: "easy"
+        params: {}
+
+protocol:
+  n_collect: 1000
+  n_train: 50000
+  batch_size: 32
+  seq_len: 50
+  eval_every: 5000
+  seeds: [0, 1, 2, 3, 4]
+
+model:
+  latent_dim: 32
+  hidden_dim: 512
+  action_dim: 6
+  beta_kl: 1.0

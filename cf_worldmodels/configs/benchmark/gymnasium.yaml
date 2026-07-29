@@ -1,0 +1,56 @@
+benchmark:
+  family: "gymnasium"
+  sequences:
+    distance_min:
+      task_A:
+        env_id: "HalfCheetah-v4"
+        params:
+          gravity: 9.8
+          mass_scale: 1.0
+          friction_scale: 1.0
+      task_B:
+        env_id: "HalfCheetah-v4"
+        params:
+          gravity: 7.0
+          mass_scale: 1.0
+          friction_scale: 1.0
+    distance_med:
+      task_A:
+        env_id: "HalfCheetah-v4"
+        params:
+          gravity: 9.8
+          mass_scale: 1.0
+          friction_scale: 1.0
+      task_B:
+        env_id: "HalfCheetah-v4"
+        params:
+          gravity: 4.0
+          mass_scale: 1.0
+          friction_scale: 1.0
+    distance_max:
+      task_A:
+        env_id: "HalfCheetah-v4"
+        params:
+          gravity: 9.8
+          mass_scale: 1.0
+          friction_scale: 1.0
+      task_B:
+        env_id: "HalfCheetah-v4"
+        params:
+          gravity: 4.0
+          mass_scale: 3.0
+          friction_scale: 0.5
+
+protocol:
+  n_collect: 1000
+  n_train: 50000
+  batch_size: 32
+  seq_len: 50
+  eval_every: 5000
+  seeds: [0, 1, 2, 3, 4]
+
+model:
+  latent_dim: 32
+  hidden_dim: 512
+  action_dim: 6
+  beta_kl: 1.0

@@ -1,0 +1,38 @@
+benchmark:
+  family: "minigrid"
+  sequences:
+    distance_min:
+      task_A:
+        env_id: "MiniGrid-Empty-5x5-v0"
+        params: {}
+      task_B:
+        env_id: "MiniGrid-Empty-8x8-v0"
+        params: {}
+    distance_med:
+      task_A:
+        env_id: "MiniGrid-Empty-8x8-v0"
+        params: {}
+      task_B:
+        env_id: "MiniGrid-FourRooms-v0"
+        params: {}
+    distance_max:
+      task_A:
+        env_id: "MiniGrid-FourRooms-v0"
+        params: {}
+      task_B:
+        env_id: "MiniGrid-KeyCorridorS3R1-v0"
+        params: {}
+
+protocol:
+  n_collect: 1000
+  n_train: 50000
+  batch_size: 32
+  seq_len: 50
+  eval_every: 5000
+  seeds: [0, 1, 2, 3, 4]
+
+model:
+  latent_dim: 32
+  hidden_dim: 512
+  action_dim: 7
+  beta_kl: 1.0

@@ -1,0 +1,11 @@
+model:
+  num_experts: 4
+  latent_dim: 32
+  hidden_dim: 512
+  action_dim: 6
+  mc_dropout_T: 10
+  mc_dropout_T_eval: 20
+  gate_lambda: 10.0
+  threshold_window: 50
+  dropout_rate: 0.1
+  beta_kl: 1.0

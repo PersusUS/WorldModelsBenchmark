@@ -10,6 +10,7 @@ from src.benchmark.metrics import (
     compute_pf,
     compute_rd,
     compute_wmf,
+    diag_gaussian_kl,
 )
 from src.models.rssm import RSSM
 
@@ -97,6 +98,57 @@ def test_pf_is_antisymmetric(model, latent_dataset, device):
     forward = compute_pf(model, other, latent_dataset, device)
     backward = compute_pf(other, model, latent_dataset, device)
     assert forward == pytest.approx(-backward, abs=1e-4)
+
+
+# --- diagonal Gaussian KL --------------------------------------------------
+
+def test_kl_matches_torch_reference():
+    """Regression for F13: the hand-written formula was neither the log-std
+    nor the log-variance KL. It must now match torch exactly."""
+    torch.manual_seed(0)
+    mu_p, log_var_p = torch.randn(4, 6), torch.randn(4, 6)
+    mu_q, log_var_q = torch.randn(4, 6), torch.randn(4, 6)
+
+    reference = torch.distributions.kl_divergence(
+        torch.distributions.Normal(mu_p, torch.exp(0.5 * log_var_p)),
+        torch.distributions.Normal(mu_q, torch.exp(0.5 * log_var_q)),
+    ).sum(dim=-1)
+
+    kl = diag_gaussian_kl(mu_p, log_var_p, mu_q, log_var_q)
+    assert torch.allclose(kl, reference, atol=1e-6)
+
+
+def test_kl_uses_the_log_variance_convention():
+    """The second output of `predict_stoch` is log-variance everywhere else in
+    the codebase (`exp(0.5 * log_sigma)` is the std). Interpreting it as a
+    log-deviation would give a different, wrong number."""
+    mu = torch.zeros(1, 1)
+    log_var_p = torch.zeros(1, 1)         # variance 1
+    log_var_q = torch.full((1, 1), 2.0)   # variance e^2, std e
+
+    # KL(N(0,1) || N(0, e^2)) = log(e) + (1 - e^2) / (2 e^2)
+    expected = 1.0 + (1.0 - torch.e ** 2) / (2 * torch.e ** 2)
+    assert diag_gaussian_kl(mu, log_var_p, mu, log_var_q).item() == pytest.approx(
+        expected, abs=1e-6
+    )
+
+
+def test_kl_is_zero_for_identical_distributions():
+    mu, log_var = torch.randn(3, 5), torch.randn(3, 5)
+    kl = diag_gaussian_kl(mu, log_var, mu.clone(), log_var.clone())
+    assert torch.allclose(kl, torch.zeros_like(kl), atol=1e-6)
+
+
+def test_kl_is_non_negative_and_asymmetric():
+    torch.manual_seed(1)
+    mu_p, log_var_p = torch.randn(8, 4), torch.randn(8, 4)
+    mu_q, log_var_q = torch.randn(8, 4), torch.randn(8, 4)
+
+    forward = diag_gaussian_kl(mu_p, log_var_p, mu_q, log_var_q)
+    backward = diag_gaussian_kl(mu_q, log_var_q, mu_p, log_var_p)
+    assert torch.all(forward >= 0.0)
+    assert torch.all(backward >= 0.0)
+    assert not torch.allclose(forward, backward)
 
 
 # --- RD --------------------------------------------------------------------

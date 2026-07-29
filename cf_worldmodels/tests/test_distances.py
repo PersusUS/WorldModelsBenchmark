@@ -91,6 +91,37 @@ def test_d_trans_is_positive_for_different_models(model, latent_dataset, device)
     assert torch.isfinite(torch.tensor(d))
 
 
+def test_d_trans_matches_torch_kl_reference(model, latent_dataset, device):
+    """Regression for F13: d_trans (Eq. 9) must be the exact diagonal-Gaussian
+    KL under the log-variance convention, not a hand-written approximation."""
+    other = copy.deepcopy(model)
+    with torch.no_grad():
+        for param in other.parameters():
+            param.add_(torch.randn_like(param) * 0.2)
+
+    obs = latent_dataset["obs"].to(device)
+    actions = latent_dataset["actions"].to(device)
+    n = obs.shape[0]
+
+    with torch.no_grad():
+        mu_A, log_var_A = model.predict_stoch(
+            model.transition(torch.zeros(n, model.hidden_dim, device=device),
+                             obs, actions)
+        )
+        mu_B, log_var_B = other.predict_stoch(
+            other.transition(torch.zeros(n, other.hidden_dim, device=device),
+                             obs, actions)
+        )
+        reference = torch.distributions.kl_divergence(
+            torch.distributions.Normal(mu_A, torch.exp(0.5 * log_var_A)),
+            torch.distributions.Normal(mu_B, torch.exp(0.5 * log_var_B)),
+        ).sum(dim=-1).mean().item()
+
+    assert compute_d_trans(model, other, latent_dataset, device) == pytest.approx(
+        reference, rel=1e-6
+    )
+
+
 def test_d_trans_leaves_models_in_eval_mode(model, latent_dataset, device):
     model.train()
     other = copy.deepcopy(model)

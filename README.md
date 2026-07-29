@@ -33,7 +33,7 @@ cf_worldmodels/
 │   ├── benchmark/          # PF / RD / WMF / FT metrics, d_param / d_trans distances
 │   └── utils/              # Replay buffer, checkpointing, logging
 ├── experiments/            # Benchmark runners and plotting scripts
-├── tests/                  # Test suite (216 tests)
+├── tests/                  # Test suite (221 tests)
 └── results/                # One directory per run (metrics.json + checkpoint)
 ```
 
@@ -120,7 +120,7 @@ distance between physics parameter vectors, Gymnasium family only) and
 python -m pytest
 ```
 
-216 tests covering the models, baselines, metrics, distances, buffer,
+221 tests covering the models, baselines, metrics, distances, buffer,
 checkpoint format, and config consistency. The 20 tests marked `integration`
 build real MiniGrid / MuJoCo / dm_control environments; skip them with:
 

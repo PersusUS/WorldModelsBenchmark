@@ -5,6 +5,8 @@ import numpy as np
 import torch
 from torch import Tensor
 
+from src.benchmark.metrics import diag_gaussian_kl
+
 
 def compute_d_param(config_A: dict, config_B: dict) -> float:
     """
@@ -38,6 +40,9 @@ def compute_d_trans(model_A, model_B, shared_dataset: dict,
     Approximated using shared rollouts and the two trained models.
 
     shared_dataset: dict with 'obs' (N, latent_dim) and 'actions' (N, action_dim)
+
+    The divergence is the exact diagonal-Gaussian KL under the log-variance
+    convention — see `src.benchmark.metrics.diag_gaussian_kl`.
     """
     obs = shared_dataset["obs"].to(device)       # (N, latent_dim)
     actions = shared_dataset["actions"].to(device)  # (N, action_dim)
@@ -55,17 +60,10 @@ def compute_d_trans(model_A, model_B, shared_dataset: dict,
     h_B_next = model_B.transition(h_B, obs, actions)
 
     # Get stochastic state distributions
-    mu_A, log_sigma_A = model_A.predict_stoch(h_A_next)
-    mu_B, log_sigma_B = model_B.predict_stoch(h_B_next)
+    mu_A, log_var_A = model_A.predict_stoch(h_A_next)
+    mu_B, log_var_B = model_B.predict_stoch(h_B_next)
 
-    # KL(P_A || P_B) for diagonal Gaussians
-    sigma_A = torch.exp(log_sigma_A)
-    sigma_B = torch.exp(log_sigma_B)
-    kl = 0.5 * torch.sum(
-        torch.log(sigma_B / (sigma_A + 1e-8) + 1e-8)
-        + (sigma_A.pow(2) + (mu_A - mu_B).pow(2)) / (sigma_B.pow(2) + 1e-8)
-        - 1,
-        dim=-1,
-    )  # (N,)
+    # KL(P_A || P_B) for diagonal Gaussians, log-variance convention
+    kl = diag_gaussian_kl(mu_A, log_var_A, mu_B, log_var_B)  # (N,)
 
     return float(kl.mean().item())

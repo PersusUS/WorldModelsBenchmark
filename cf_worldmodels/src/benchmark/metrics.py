@@ -10,6 +10,26 @@ from typing import List
 import torch
 import torch.nn.functional as F
 from torch import Tensor
+from torch.distributions import Normal, kl_divergence
+
+
+def diag_gaussian_kl(mu_p: Tensor, log_var_p: Tensor,
+                     mu_q: Tensor, log_var_q: Tensor) -> Tensor:
+    """
+    D_KL( N(mu_p, diag(exp(log_var_p))) || N(mu_q, diag(exp(log_var_q))) ),
+    summed over the last (feature) dimension.
+
+    The second output of `predict_stoch` is **log-variance** throughout this
+    codebase: `sample_stoch`, `compute_nll` and every `compute_loss` build the
+    standard deviation as `exp(0.5 * log_sigma)`. Both arguments here follow
+    that same convention, and the divergence is delegated to
+    `torch.distributions.kl_divergence` rather than written out by hand.
+
+    Returns: (...,) tensor with the batch dimensions of the inputs.
+    """
+    p = Normal(mu_p, torch.exp(0.5 * log_var_p))
+    q = Normal(mu_q, torch.exp(0.5 * log_var_q))
+    return kl_divergence(p, q).sum(dim=-1)
 
 
 @torch.no_grad()
@@ -74,6 +94,9 @@ def compute_rd(model_i, model_k, dataset_i: dict,
     Rollout Divergence: RD = (1/N) sum D_KL(q(tau|M_i) || q(tau|M_k))
     tau = trajectory of `horizon` steps sampled from dataset_i start states.
     Approximated via Monte Carlo.
+
+    The per-step divergence is the exact diagonal-Gaussian KL under the
+    log-variance convention — see `diag_gaussian_kl`.
     """
     device = next(model_i.parameters()).device
     model_i.eval()
@@ -106,18 +129,11 @@ def compute_rd(model_i, model_k, dataset_i: dict,
         h_k = model_k.transition(h_k, z_k, a)
 
         # Get distributions
-        mu_i, log_sigma_i = model_i.predict_stoch(h_i)
-        mu_k, log_sigma_k = model_k.predict_stoch(h_k)
+        mu_i, log_var_i = model_i.predict_stoch(h_i)
+        mu_k, log_var_k = model_k.predict_stoch(h_k)
 
         # KL(P_i || P_k)
-        sigma_i = torch.exp(log_sigma_i)
-        sigma_k = torch.exp(log_sigma_k)
-        kl = 0.5 * torch.sum(
-            torch.log(sigma_k / (sigma_i + 1e-8) + 1e-8)
-            + (sigma_i.pow(2) + (mu_i - mu_k).pow(2)) / (sigma_k.pow(2) + 1e-8)
-            - 1,
-            dim=-1,
-        )  # (N,)
+        kl = diag_gaussian_kl(mu_i, log_var_i, mu_k, log_var_k)  # (N,)
         total_kl = total_kl + kl.mean().item()
 
         # Sample next z from model_i for continued rollout

@@ -30,12 +30,29 @@ benchmark:
         task_name: "easy"
         params: {}
 
+# Training protocol. These values are what `experiments/run_full_benchmark.py`
+# actually executes: it reads every one of them from here and hardcodes none.
+# Every metrics.json records the block it was produced with, so Table 1 of the
+# paper must be generated from the results, never written by hand.
 protocol:
-  n_collect: 1000
-  n_train: 50000
-  batch_size: 32
-  seq_len: 50
-  eval_every: 5000
+  n_collect: 20            # episodes collected per task, random policy
+  n_train: 1000            # gradient updates per task
+  batch_size: 8
+  seq_len: 5
+  learning_rate: 1.0e-3
+  curve_points: 20         # reconstruction-loss samples kept per task
+  n_eval_episodes: 10      # held-out task-A episodes, never trained on
+  n_eval_transitions: 100  # transitions drawn from them to form D_i
+  n_fisher_transitions: 50 # subset used for EWC's Fisher diagonal
+  n_recon_frames: 200      # held-out frames for the pixel-space task-A check
+  rd_horizon: 15
+  rd_samples: 50
+  ewc_lambda: 1000.0
+  mc_dropout_T_train: 3    # overrides the model config during training only
+  wmf_weights:             # P7 is still open; these are the paper's Eq. 6
+    alpha: 0.4
+    beta: 0.4
+    gamma: 0.2
   seeds: [0, 1, 2, 3, 4]
 
 model:

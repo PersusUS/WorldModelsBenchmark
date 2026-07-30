@@ -18,6 +18,7 @@ independent sources of nondeterminism were measured (F16):
 `set_seed` covers (2) and the global RNGs; the caller must also seed each
 environment, which `set_seed` cannot reach.
 """
+import contextlib
 import os
 import random
 
@@ -52,3 +53,31 @@ def set_seed(seed: int, deterministic: bool = True) -> None:
 
     torch.backends.cudnn.deterministic = deterministic
     torch.backends.cudnn.benchmark = not deterministic
+
+
+@contextlib.contextmanager
+def preserve_rng_state():
+    """
+    Restore every global RNG on exit, so measuring cannot alter a run.
+
+    Instrumentation inserted in the middle of training must not shift the
+    random stream the rest of the run draws from, or the run stops being
+    comparable with one that was not instrumented. Most evaluation code here is
+    already RNG-neutral — in eval mode the encoder returns mu instead of
+    sampling — but not all of it: UG-MTM's gate keeps MC-dropout active at
+    evaluation time by design, and each of those passes draws a dropout mask.
+    """
+    states = (
+        random.getstate(),
+        np.random.get_state(),
+        torch.get_rng_state(),
+        torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+    )
+    try:
+        yield
+    finally:
+        random.setstate(states[0])
+        np.random.set_state(states[1])
+        torch.set_rng_state(states[2])
+        if states[3] is not None:
+            torch.cuda.set_rng_state_all(states[3])

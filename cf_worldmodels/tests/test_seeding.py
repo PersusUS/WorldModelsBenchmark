@@ -5,12 +5,13 @@ reproducible, because the environments own RNGs no global seed reaches and cuDNN
 picks kernels nondeterministically.
 """
 import hashlib
+import random
 
 import numpy as np
 import pytest
 import torch
 
-from src.utils.seeding import set_seed
+from src.utils.seeding import preserve_rng_state, set_seed
 
 
 # --- set_seed --------------------------------------------------------------
@@ -200,3 +201,68 @@ def test_seeding_does_not_make_every_episode_identical():
         for ep in buf.episodes
     }
     assert len(digests) > 1, "every episode started from the same state"
+
+
+# --- preserve_rng_state ----------------------------------------------------
+
+class TestPreserveRngState:
+    """
+    Instrumentation added mid-run must not shift the random stream the rest of
+    the run draws from (F17). Without that guarantee, a run that measures its
+    own task-A convergence is no longer the same run as one that does not.
+    """
+
+    def test_torch_stream_continues_unchanged(self):
+        set_seed(5)
+        expected = torch.randn(8)
+
+        set_seed(5)
+        with preserve_rng_state():
+            torch.randn(64)
+        assert torch.equal(expected, torch.randn(8))
+
+    def test_numpy_stream_continues_unchanged(self):
+        set_seed(5)
+        expected = np.random.rand(8)
+
+        set_seed(5)
+        with preserve_rng_state():
+            np.random.rand(64)
+        assert np.array_equal(expected, np.random.rand(8))
+
+    def test_python_random_stream_continues_unchanged(self):
+        set_seed(5)
+        expected = [random.random() for _ in range(4)]
+
+        set_seed(5)
+        with preserve_rng_state():
+            [random.random() for _ in range(64)]
+        assert expected == [random.random() for _ in range(4)]
+
+    def test_restores_even_when_the_body_raises(self):
+        set_seed(5)
+        expected = torch.randn(8)
+
+        set_seed(5)
+        with pytest.raises(RuntimeError):
+            with preserve_rng_state():
+                torch.randn(64)
+                raise RuntimeError("measurement blew up")
+        assert torch.equal(expected, torch.randn(8))
+
+    def test_dropout_in_train_mode_is_a_stream_consumer(self):
+        """
+        The guard is not theoretical: UG-MTM evaluates its gate with dropout
+        active, and each of those passes draws from the torch stream. If this
+        ever stops being true the guard is still correct, but the reason it
+        exists changes.
+        """
+        layer = torch.nn.Dropout(p=0.5)
+        layer.train()
+        x = torch.ones(64)
+
+        set_seed(5)
+        expected = torch.randn(8)
+        set_seed(5)
+        layer(x)
+        assert not torch.equal(expected, torch.randn(8))

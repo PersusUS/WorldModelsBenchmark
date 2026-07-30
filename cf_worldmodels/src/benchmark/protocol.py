@@ -8,6 +8,7 @@ import torch
 from tqdm import tqdm
 
 from src.envs.base_env import BaseEnv
+from src.models.vae import reconstruction_loss
 from src.utils.buffer import ReplayBuffer
 
 
@@ -110,3 +111,51 @@ def build_latent_eval_dataset(model, buffer: ReplayBuffer, device,
 
     model.train(was_training)
     return dataset
+
+
+@torch.no_grad()
+def evaluate_reconstruction(model, buffer: ReplayBuffer, device,
+                            n_frames: int = 200, seed: Optional[int] = None,
+                            chunk_size: int = 64) -> float:
+    """
+    Reconstruction error on held-out frames, in pixel space.
+
+    Returns squared error summed over pixels and averaged over frames — the
+    same quantity `compute_loss` reports as its "reconstruction" component, so
+    the two are directly comparable. The difference is that these frames never
+    entered the training buffer, and the encoder runs in eval mode (z = mu, no
+    posterior sampling), so the number is deterministic.
+
+    Why this exists: it is the only quality signal in the benchmark that is
+    comparable **across training budgets**. The latent NLL is measured against
+    latents the model itself produces (see `build_latent_eval_dataset`), and
+    that target moves as the encoder trains, so NLL at 1000 steps and NLL at
+    10000 steps are not scored on the same data. Pixels do not move.
+    """
+    was_training = model.training
+    model.eval()
+
+    frames = [step["obs"] for ep in buffer.episodes for step in ep]
+    if not frames:
+        raise ValueError(
+            "cannot evaluate reconstruction: the buffer holds no frames"
+        )
+
+    rng = np.random.default_rng(seed)
+    take = min(n_frames, len(frames))
+    idx = rng.choice(len(frames), size=take, replace=False)
+
+    total = 0.0
+    for start in range(0, take, chunk_size):
+        batch = [frames[i] for i in idx[start:start + chunk_size]]
+        # (N, 64, 64, 3) float32 [0,1] -> (N, 3, 64, 64)
+        x = torch.from_numpy(np.stack(batch)).to(device).permute(0, 3, 1, 2)
+        z = model.encode(x)
+        h = torch.zeros(x.shape[0], model.hidden_dim, device=device)
+        recon = model.decode(h, z)
+        # reconstruction_loss averages over the chunk; undo that so chunks of
+        # different sizes weigh by their frame count.
+        total += float(reconstruction_loss(recon, x).item()) * x.shape[0]
+
+    model.train(was_training)
+    return total / take

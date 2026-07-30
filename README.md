@@ -33,7 +33,7 @@ cf_worldmodels/
 │   ├── benchmark/          # PF / RD / WMF / FT metrics, d_param / d_trans distances
 │   └── utils/              # Replay buffer, checkpointing, logging
 ├── experiments/            # Benchmark runners and plotting scripts
-├── tests/                  # Test suite (234 tests)
+├── tests/                  # Test suite (291 tests)
 └── results/                # One directory per run (metrics.json + checkpoint)
 ```
 
@@ -65,12 +65,51 @@ whose `metrics.json` already exists, so it is safe to interrupt and resume:
 python experiments/run_full_benchmark.py
 ```
 
+The training protocol is not defined in the runner. Every value comes from the
+`protocol:` block of `configs/benchmark/<family>.yaml`, is printed before
+training starts, and is recorded in each `metrics.json` — so the protocol table
+in the paper is generated from the results rather than written by hand. Runs
+cached under a different protocol are refused rather than silently averaged into
+the same cell.
+
+Print the effective protocol and the run plan without training anything:
+
+```bash
+python experiments/run_full_benchmark.py --dry-run
+```
+
+Restrict the grid, or override a protocol field explicitly:
+
+```bash
+python experiments/run_full_benchmark.py --families minigrid --methods ewc --seeds 0 1 --steps 2000
+```
+
+Measure how far task A is actually learned, and how that changes with the
+training budget (one run at the largest budget, evaluated at each multiple of
+`n_train` along the way):
+
+```bash
+python experiments/convergence_A.py --family minigrid --multipliers 1 2 5 10
+```
+
 Regenerate the paper figure and the results table from the stored metrics
 (no training required):
 
 ```bash
 python experiments/plot_final.py
 ```
+
+Aggregate every cell, with the task-A quality columns alongside the forgetting
+metrics, and optionally a seed-paired comparison of two methods:
+
+```bash
+python experiments/summarize_results.py --compare replay_infinite finetuning
+```
+
+It refuses to average runs that were produced under different protocols, and it
+reports an exact paired permutation p rather than a t-test: with 5 seeds the
+smallest two-sided p an exact test can return is 2/2^5 = 0.0625, so a parametric
+p-value in that regime describes the normality assumption more than the data.
 
 Run a single method/family/distance combination:
 
@@ -122,13 +161,30 @@ files, which are.
 - **PIS** (Policy Impact Score) — reserved in the metrics schema; reported as
   `0.0` in this release (see Known limitations).
 - **WMF** = `alpha*PF + beta*RD + gamma*PIS`, with `alpha=beta=0.4, gamma=0.2`.
-- **FT** (Forward Transfer) — `NLL(random init) - NLL(pretrained)`. Positive
-  means prior knowledge helped.
+- **FT** — `NLL(random init, D_i) - NLL(post-task-i model, D_i)`. Reported under
+  the name Forward Transfer, but read the fourth Known limitation before using
+  it as one: no task-B data enters the computation, so it cannot distinguish
+  continual-learning methods that share an architecture. It is a measure of how
+  well task *i* was learned.
 
 All of these are evaluated on `D_i`: held-out task-A rollouts, collected
 separately from the training buffer and encoded once by the post-task-A model
 (`protocol.build_latent_eval_dataset`), so that both models being compared are
-scored on identical inputs and identical targets.
+scored on identical inputs and identical targets. That also means they are blind
+to drift in the encoder itself — see Known limitations.
+
+Alongside them, each run records how well task A was learned in the first place,
+because a forgetting benchmark has to show there was something to forget:
+
+- `heldout_reconstruction_A_after_task_A` / `..._after_task_B` — squared
+  reconstruction error per frame, in **pixel** space, on held-out task-A frames.
+  This is the only quality signal that is comparable across training budgets: the
+  latent NLL is scored against latents the model itself produces, and that target
+  moves as the encoder trains.
+- `nll_A_after_task_A`, `nll_A_after_task_B`, `nll_A_random_init` — the three
+  NLLs that PF and FT are built from, so both stay decomposable.
+- `initial/final_reconstruction_loss_A` and `_B`, plus a 20-point curve for each
+  task, and `n_nan_steps_A/B` for steps dropped as non-finite.
 
 Dynamic distance between two tasks is measured by `d_param` (normalized L2
 distance between physics parameter vectors, Gymnasium family only) and
@@ -140,8 +196,8 @@ distance between physics parameter vectors, Gymnasium family only) and
 python -m pytest
 ```
 
-234 tests covering the models, baselines, metrics, distances, buffer,
-checkpoint format, seeding and config consistency. The 25 tests marked
+291 tests covering the models, baselines, metrics, distances, buffer,
+checkpoint format, seeding, protocol resolution and config consistency. The 25 tests marked
 `integration` build real MiniGrid / MuJoCo / dm_control environments; skip them
 with:
 
@@ -162,24 +218,47 @@ aware of before building on it.
    task A and the gate routes the wrong way. UG-MTM's premise holds only in
    the first regime.
 
-2. **Training scale does not match the configs.** The benchmark configs declare
-   `n_collect: 1000`, `n_train: 50000`, `batch_size: 32`, `seq_len: 50`, but
-   `run_full_benchmark.py` hardcodes `N_COLLECT=20`, `STEPS=1000`,
-   `BATCH_SIZE=8`, `SEQ_LEN=5`, and overrides `mc_dropout_T` from 10 to 3. The
-   published numbers come from the hardcoded values.
+2. **PF and RD are blind to forgetting in the encoder.** They are evaluated on
+   latents that were encoded once, by the post-task-A model, and `compute_nll`
+   never calls `encode` — so they measure drift in the GRU and the stochastic
+   head within a *frozen* latent basis. Measured on MiniGrid `distance_med`
+   (seed 999): fine-tuning's held-out task-A reconstruction degrades by a factor
+   of **112** (6.49 → 725.27 squared error per frame) while its PF comes out
+   **negative** (−1.78). This is deliberate — the benchmark's scope is the
+   transition component — but it means WMF is not a measure of how much the
+   world model as a whole forgot. Every run records
+   `heldout_reconstruction_A_after_task_{A,B}` so both can be read side by side.
 
-3. **The DMControl `distance_min` pair is not actually two different tasks.**
+3. **The training scale is small.** 20 episodes of a random policy per task and
+   1000 gradient updates at batch 8, sequence length 5; UG-MTM's training-time
+   MC-dropout budget is 3 passes. Every one of those values is declared in the
+   `protocol:` block of the family config, recorded in each `metrics.json`, and
+   printed before training. Task A does get learned at this scale — held-out
+   reconstruction reaches 5.3e-04 per pixel, RMSE ≈ 0.023 on `[0,1]` — and
+   `experiments/convergence_A.py` measures how that changes with the budget.
+
+4. **FT does not measure forward transfer.** It is computed from the post-task-i
+   model on task-i data, so no task-B data enters it. Methods that share an
+   architecture and differ only at the task switch — fine-tuning, replay, EWC —
+   therefore get **identical** FT by construction: measured across 5 seeds and
+   two distance levels, fine-tuning and infinite replay differ by exactly 0.000
+   in all 10 runs. The quantity is still useful (it is the evidence that task A
+   was learned at all, stored as `nll_A_after_task_A` and `nll_A_random_init`),
+   but the label is wrong and any conclusion drawn from comparing FT across
+   same-architecture methods is unsupported.
+
+5. **The DMControl `distance_min` pair is not actually two different tasks.**
    Both `task_A` and `task_B` are `cheetah/run`; the `lateral_wind: true`
    parameter that was meant to differentiate them is never read by
    `DMControlEnv`, which only takes `domain_name` and `task_name`.
 
-4. **No ablation study ships with this release.** The previous
+6. **No ablation study ships with this release.** The previous
    `run_ablations.py` built an overridden config and then never passed it to
    the training routine, which reloaded the unmodified YAML from disk — so all
    five ablations silently ran plain UG-MTM. It has been removed rather than
    left in place producing misleading output.
 
-5. **Gate scaling uses only the final timestep's gates.** `UG_MTM.transition`
+7. **Gate scaling uses only the final timestep's gates.** `UG_MTM.transition`
    clears and re-registers its backward hooks on every call, so after unrolling
    a sequence the gradients for the whole sequence are scaled by the gates
    computed at the last step.

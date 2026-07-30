@@ -82,15 +82,17 @@ class ThresholdNet(nn.Module):
             nn.Linear(32, 1),
             nn.Sigmoid(),
         )
-        # Uncertainty history buffer
-        self.register_buffer(
-            "_history", torch.zeros(window)
-        )
-        self._ptr = 0
+        # Uncertainty history, as a circular buffer. Both the contents and the
+        # write position are registered buffers: a plain int attribute would be
+        # left out of state_dict, so reloading a checkpoint would restore the
+        # history but reset the cursor to 0 and resume overwriting from the
+        # wrong end of the window.
+        self.register_buffer("_history", torch.zeros(window))
+        self.register_buffer("_ptr", torch.zeros((), dtype=torch.long))
 
     def update_history(self, u_mean: float) -> None:
         """Add mean uncertainty to the circular buffer."""
-        self._history[self._ptr % self.window] = u_mean
+        self._history[int(self._ptr) % self.window] = u_mean
         self._ptr += 1
 
     def forward(self) -> Tensor:

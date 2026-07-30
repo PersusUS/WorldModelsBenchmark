@@ -123,6 +123,25 @@ def test_threshold_history_wraps_around_circularly():
     assert net._history.tolist() == pytest.approx([4.0, 2.0, 3.0])
 
 
+def test_threshold_write_cursor_survives_a_checkpoint_roundtrip():
+    """
+    Regression for I4: `_ptr` used to be a plain attribute, so it was left out
+    of state_dict. Reloading restored the history but reset the cursor to 0, and
+    the circular buffer resumed overwriting from the wrong end of the window.
+    """
+    net = ThresholdNet(window=3)
+    for value in [1.0, 2.0]:
+        net.update_history(value)
+
+    reloaded = ThresholdNet(window=3)
+    reloaded.load_state_dict(net.state_dict())
+    assert int(reloaded._ptr) == 2
+
+    net.update_history(3.0)
+    reloaded.update_history(3.0)
+    assert reloaded._history.tolist() == pytest.approx(net._history.tolist())
+
+
 def test_threshold_responds_to_history():
     net = ThresholdNet(window=4)
     tau_empty = net().item()

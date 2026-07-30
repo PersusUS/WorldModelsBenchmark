@@ -280,17 +280,28 @@ def switch_task(model, method, model_i, buf_A, buf_B, buf_A_heldout,
                 param.requires_grad_(False)
 
 
-def collect_cell_buffers(env_A, env_B, protocol):
+def collect_cell_buffers(env_A, env_B, seed, protocol):
     """
-    The four buffers a cell needs, collected in a fixed order.
+    The four buffers every method of one (family, distance, seed) shares.
 
-    `run_cell` and `run_reference_cell` call this after seeding the two
-    environments identically, so both see byte-identical episodes: rollout
-    content depends only on the environments' own RNGs and on the order of
-    these calls. It never touches the global torch/numpy stream — all three
-    families sample actions from an environment-owned generator — which is why
-    a reference model trained in a separate pass is comparable with the cells.
+    Collected once and handed to all five cells and to the reference pair.
+    Before this was hoisted, each of the six re-seeded the environments and
+    re-collected the same episodes, which is where most of the wall time of a
+    Gymnasium or dm_control cell went: 60 episodes at ~2.7 s each, six times
+    over, for data that is identical by construction.
+
+    Identical because the two environments are seeded here, once per cell
+    rather than per episode, so successive resets walk a deterministic stream
+    of distinct initial states — which is also what keeps the held-out episodes
+    different from the ones that get trained on. Rollout content depends only
+    on the environments' own RNGs and on the order of these calls; all three
+    families sample actions from an environment-owned generator, so nothing
+    here consumes the global torch/numpy stream.
     """
+    set_seed(seed)
+    env_A.seed(seed)
+    env_B.seed(seed + 1)
+
     buf_A = ReplayBuffer(max_episodes=protocol["n_collect"],
                          seq_len=protocol["seq_len"])
     buf_B = ReplayBuffer(max_episodes=protocol["n_collect"],
@@ -310,8 +321,8 @@ def reference_path(results_root, family, distance, seed):
     return results_root / "_reference" / f"{family}_{distance}_{seed}.json"
 
 
-def run_reference_cell(env_A, env_B, device, seed, family, distance, protocol,
-                       results_root):
+def run_reference_cell(buffers, action_dim, device, seed, family, distance,
+                       protocol, results_root):
     """
     Train the two from-scratch models the cells of this (family, distance,
     seed) need, and store what they are needed for.
@@ -328,16 +339,11 @@ def run_reference_cell(env_A, env_B, device, seed, family, distance, protocol,
     Both are properties of the task pair and the seed, not of the continual
     learning method, so this runs once per (family, distance, seed) and every
     method's cell reads the same numbers back. Plain RSSMs are used for the
-    same reason.
+    same reason, and they train on the very buffers the cells train on.
     """
     set_seed(seed)
-    env_A.seed(seed)
-    env_B.seed(seed + 1)
+    buf_A, buf_B, buf_A_heldout, buf_B_heldout = buffers
 
-    buf_A, buf_B, buf_A_heldout, buf_B_heldout = collect_cell_buffers(
-        env_A, env_B, protocol)
-
-    action_dim = env_A.action_dim
     model_A = create_model("finetuning", action_dim, protocol).to(device)
     stats_A = train_task(
         model_A, buf_A,
@@ -407,24 +413,19 @@ def load_reference(results_root, family, distance, seed, protocol):
     return stored
 
 
-def run_cell(method, env_A, env_B, device, seed, family, distance, protocol,
-             results_root, reference=None):
+def run_cell(method, buffers, action_dim, device, seed, family, distance,
+             protocol, results_root, reference=None):
     """Train one (method, family, distance, seed) cell and write its metrics."""
     # Seeding the global RNGs is not enough: the environments own RNGs that no
-    # global seed reaches, and cuDNN needs to be put in deterministic mode.
-    # See src/utils/seeding.py. The two environments are seeded once here, not
-    # per episode, so successive resets walk a deterministic stream of distinct
-    # initial states — that is also what keeps the held-out task-A episodes
-    # different from the ones used for training.
+    # global seed reaches, and cuDNN needs to be put in deterministic mode. See
+    # src/utils/seeding.py. `buffers` was collected under exactly this seed by
+    # collect_cell_buffers, and rollout collection consumes nothing from the
+    # global stream, so re-seeding here puts the model initialisation at the
+    # same point it would reach if the collection had happened inline.
     set_seed(seed)
-    env_A.seed(seed)
-    env_B.seed(seed + 1)
 
-    action_dim = env_A.action_dim
+    buf_A, buf_B, buf_A_heldout, buf_B_heldout = buffers
     model = create_model(method, action_dim, protocol).to(device)
-
-    buf_A, buf_B, buf_A_heldout, buf_B_heldout = collect_cell_buffers(
-        env_A, env_B, protocol)
 
     # Train Task A
     opt = torch.optim.Adam(model.parameters(), lr=protocol["learning_rate"])
@@ -725,52 +726,50 @@ def main(argv=None):
                     f"{declared} but {family} exposes {env_A.action_dim}"
                 )
 
-            seeds = protocol["seeds"]
-            references = {}
-            for seed in seeds:
-                references[seed] = load_reference(results_root, family,
-                                                  distance, seed, protocol)
-                # Only train a missing reference if some cell still needs it.
-                # A cached cell is never recomputed, so its ft would stay null
-                # either way: training the pair then would cost two runs and
-                # change nothing.
-                needed = any(
-                    not (results_root / method /
-                         f"{family}_{distance}_{seed}" / "metrics.json").exists()
-                    for method in args.methods
-                )
-                if references[seed] is None and needed and not args.skip_reference:
-                    print(f"\n=== reference (task B from scratch) | {family} "
-                          f"| {distance} | seed={seed} ===")
-                    references[seed] = run_reference_cell(
-                        env_A, env_B, device, seed, family, distance,
-                        protocol, results_root)
-                    print(f"  d_trans={references[seed]['d_trans']:.4f} | "
-                          f"task-B held-out recon from scratch="
-                          f"{references[seed]['heldout_reconstruction_B_from_scratch']:.2f}")
+            # The loop is nested by seed rather than by method so that the four
+            # buffers are collected once and shared by the five cells and the
+            # reference pair, all of which would otherwise re-collect the same
+            # episodes.
+            for seed in protocol["seeds"]:
+                pending = [
+                    method for method in args.methods
+                    if not (results_root / method /
+                            f"{family}_{distance}_{seed}" /
+                            "metrics.json").exists()
+                ]
+                reference = load_reference(results_root, family, distance,
+                                           seed, protocol)
+                # Only train a missing reference if some cell still needs it: a
+                # cached cell is never recomputed, so its ft would stay null
+                # either way and the pair would cost two runs for nothing.
+                need_reference = (reference is None and pending
+                                  and not args.skip_reference)
 
-            for method in args.methods:
-                paths = [results_root / method / f"{family}_{distance}_{s}" / "metrics.json"
-                         for s in seeds]
-                if all(p.exists() for p in paths):
-                    print(f"  skip {method}/{family}/{distance} (all seeds exist)")
+                cached = len(args.methods) - len(pending)
+                print(f"\n=== {family} | {distance} | seed={seed} ==="
+                      + (f"  ({cached} method(s) cached)" if cached else ""))
+                if not pending and not need_reference:
                     continue
 
-                print(f"\n=== {method} | {family} | {distance} ===")
-                for seed, path in zip(seeds, paths):
-                    if path.exists():
-                        m = json.load(open(path))
-                        print(f"  seed={seed} | PF={m['pf']:.4f} "
-                              f"RD={m['rd']:.4f} (cached)")
-                        continue
+                buffers = collect_cell_buffers(env_A, env_B, seed, protocol)
 
-                    m = run_cell(method, env_A, env_B, device, seed, family,
-                                 distance, protocol, results_root,
-                                 reference=references[seed])
+                if need_reference:
+                    reference = run_reference_cell(
+                        buffers, env_A.action_dim, device, seed, family,
+                        distance, protocol, results_root)
+                    print(f"  reference   | d_trans={reference['d_trans']:.4f} "
+                          f"| task-B held-out recon from scratch="
+                          f"{reference['heldout_reconstruction_B_from_scratch']:.2f}")
+
+                for method in pending:
+                    m = run_cell(method, buffers, env_A.action_dim, device,
+                                 seed, family, distance, protocol,
+                                 results_root, reference=reference)
                     ft = "  n/a" if m["ft"] is None else f"{m['ft']:.4f}"
-                    print(f"  seed={seed} | PF={m['pf']:.4f} RD={m['rd']:.4f} "
-                          f"FT={ft} (WMF={m['wmf']:.4f}) | "
-                          f"task-A held-out recon={m['heldout_reconstruction_A_after_task_A']:.2f}"
+                    print(f"  {method:<16} | PF={m['pf']:.4f} "
+                          f"RD={m['rd']:.4f} FT={ft} (WMF={m['wmf']:.4f}) | "
+                          f"task-A held-out recon="
+                          f"{m['heldout_reconstruction_A_after_task_A']:.2f}"
                           f" -> {m['heldout_reconstruction_A_after_task_B']:.2f}")
 
             env_A.close()

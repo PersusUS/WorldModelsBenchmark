@@ -8,7 +8,9 @@ field it needs from it, and nothing silently defaults.
 """
 import json
 
+import numpy as np
 import pytest
+import torch
 from omegaconf import OmegaConf
 
 from experiments.run_full_benchmark import (
@@ -16,6 +18,7 @@ from experiments.run_full_benchmark import (
     MODEL_FIELDS,
     PROTOCOL_FIELDS,
     check_protocol_consistency,
+    collect_cell_buffers,
     create_model,
     load_reference,
     parse_args,
@@ -25,6 +28,7 @@ from experiments.run_full_benchmark import (
 )
 
 import experiments.run_full_benchmark as runner
+from src.utils.seeding import set_seed
 
 ACTION_DIM = 4
 
@@ -214,6 +218,94 @@ def test_results_without_a_recorded_protocol_stop_the_run(tmp_path, cfg):
     path.write_text(json.dumps({"wmf": 1.0}))
     with pytest.raises(SystemExit):
         check_protocol_consistency([path], resolve_protocol(cfg))
+
+
+# --- the shared buffers ----------------------------------------------------
+
+class StubEnv:
+    """Minimal BaseEnv-shaped environment with an RNG of its own.
+
+    Real environments keep their randomness in a generator the global seed
+    never reaches -- that is what F16 was about -- so a stub that reads the
+    global stream would test the opposite of what matters here.
+    """
+
+    EPISODE_LENGTH = 4
+
+    def __init__(self, action_dim=2):
+        self._rng = np.random.default_rng()
+        self._t = 0
+        self.action_dim = action_dim
+        self.obs_shape = (64, 64, 3)
+
+    def seed(self, seed):
+        self._rng = np.random.default_rng(seed)
+
+    def reset(self):
+        self._t = 0
+        return self._rng.random((64, 64, 3), dtype=np.float32)
+
+    def step(self, action):
+        self._t += 1
+        done = self._t >= self.EPISODE_LENGTH
+        return self._rng.random((64, 64, 3), dtype=np.float32), 0.0, done, {}
+
+    def sample_action(self):
+        return self._rng.random(self.action_dim, dtype=np.float32)
+
+    def close(self):
+        pass
+
+
+@pytest.fixture
+def tiny_protocol(cfg):
+    return resolve_protocol(cfg, {"n_collect": 2, "seq_len": 2})
+
+
+def _episodes(buffers):
+    return [[step["obs"] for step in ep] for buf in buffers for ep in buf.episodes]
+
+
+def test_the_same_seed_collects_the_same_episodes(tiny_protocol):
+    """The five methods and the reference share one collection because a second
+    one would reproduce it exactly. If that stops being true, they stop being
+    comparable and the sharing becomes a bug rather than a saving."""
+    env_A, env_B = StubEnv(), StubEnv()
+    first = _episodes(collect_cell_buffers(env_A, env_B, 7, tiny_protocol))
+    second = _episodes(collect_cell_buffers(env_A, env_B, 7, tiny_protocol))
+
+    assert len(first) == len(second)
+    for a, b in zip(first, second):
+        assert np.array_equal(np.array(a), np.array(b))
+
+
+def test_a_different_seed_collects_different_episodes(tiny_protocol):
+    env_A, env_B = StubEnv(), StubEnv()
+    first = _episodes(collect_cell_buffers(env_A, env_B, 7, tiny_protocol))
+    other = _episodes(collect_cell_buffers(env_A, env_B, 8, tiny_protocol))
+    assert not np.array_equal(np.array(first[0]), np.array(other[0]))
+
+
+def test_held_out_episodes_are_not_the_training_ones(tiny_protocol):
+    """Task-A quality is only evidence if the frames were never trained on."""
+    env_A, env_B = StubEnv(), StubEnv()
+    buf_A, _buf_B, buf_A_heldout, _buf_B_heldout = collect_cell_buffers(
+        env_A, env_B, 7, tiny_protocol)
+    trained = {ep[0]["obs"].tobytes() for ep in buf_A.episodes}
+    heldout = {ep[0]["obs"].tobytes() for ep in buf_A_heldout.episodes}
+    assert not (trained & heldout)
+
+
+def test_collection_leaves_the_global_streams_alone(tiny_protocol):
+    """Hoisting the collection out of run_cell only preserves results because
+    it draws nothing from the streams that initialise and train the model."""
+    env_A, env_B = StubEnv(), StubEnv()
+    collect_cell_buffers(env_A, env_B, 7, tiny_protocol)
+    after_collection = (torch.randn(4).tolist(), np.random.random(4).tolist())
+
+    set_seed(7)
+    direct = (torch.randn(4).tolist(), np.random.random(4).tolist())
+    assert after_collection == direct
 
 
 # --- the from-scratch task-B reference (P8/P10) -----------------------------

@@ -221,7 +221,7 @@ the task pair and the seed rather than of the method, so it is computed once per
 python -m pytest
 ```
 
-331 tests covering the models, baselines, metrics, distances, buffer,
+345 tests covering the models, baselines, metrics, distances, buffer,
 checkpoint format, seeding, protocol resolution and config consistency. The 25 tests marked
 `integration` build real MiniGrid / MuJoCo / dm_control environments; skip them
 with:

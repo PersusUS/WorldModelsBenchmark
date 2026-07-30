@@ -103,8 +103,9 @@ training budget (one run at the largest budget, evaluated at each multiple of
 python experiments/convergence_A.py --family minigrid --multipliers 1 2 5 10
 ```
 
-Regenerate the figure from the stored metrics (no training required). Note that
-`plot_final.py` still reads `wmf`, which is no longer the reported number:
+Regenerate the main figure from the stored metrics (no training required): one
+row per reported metric, one column per family, with the measured `d_trans` on
+the X axis wherever the runs carry it:
 
 ```bash
 python experiments/plot_final.py

@@ -1,139 +1,162 @@
 """
-experiments/plot_final.py
-Final publication-quality figure for WMF Benchmark paper.
-- Independent Y-axis per panel (makes each family readable)
-- Gymnasium X-axis shows d_param values instead of ordinal labels
-- Clean style suitable for workshop paper
+The benchmark's main figure: forgetting as a function of dynamic distance.
+
+One row per reported metric (PF and RD) and one column per family. There is no
+WMF panel on purpose: with PIS hardcoded to zero the aggregate is
+0.4*PF + 0.4*RD, of which RD supplies 78-97%, so a WMF panel is an RD panel
+with a different label. `summarize_results.py` still prints WMF next to the
+share of it that comes from RD; every table belongs there, and this file only
+draws.
+
+The X axis is the measured distance between the two environments, not an
+ordinal label. `d_trans` (Eq. 9) is computed for all three families now, so it
+is used wherever the runs carry it; a family whose runs predate that falls back
+to Min/Med/Max positions, and the axis label says which of the two is being
+shown.
+
+    python experiments/plot_final.py
+    python experiments/plot_final.py --results-dir results --out results/figures
 """
-import sys, json
-import numpy as np
+import argparse
+import json
+import sys
+from pathlib import Path
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from pathlib import Path
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.benchmark.distances import compute_d_param
-from omegaconf import OmegaConf
 
-# --- Config ---
 METHODS = ["finetuning", "replay_infinite", "ewc", "progressive_nets", "ug_mtm"]
-LABELS  = ["Finetuning", "Replay (Infinite)", "EWC", "Progressive Nets", "UG-MTM (ours)"]
-COLORS  = ["#e41a1c", "#377eb8", "#ff7f00", "#4daf4a", "#000000"]
-MARKERS = ["s",        "D",       "^",       "v",       "o"]
-LINES   = ["--",       "-.",      ":",       "--",      "-"]
-LW      = [1.8,        1.8,       1.8,       1.8,       2.5]
+LABELS = ["Finetuning", "Replay (Infinite)", "EWC", "Progressive Nets",
+          "UG-MTM (ours)"]
+COLORS = ["#e41a1c", "#377eb8", "#ff7f00", "#4daf4a", "#000000"]
+MARKERS = ["s", "D", "^", "v", "o"]
+LINES = ["--", "-.", ":", "--", "-"]
+LW = [1.8, 1.8, 1.8, 1.8, 2.5]
 
-FAMILIES   = ["minigrid",    "gymnasium",       "dmcontrol"]
-FAM_LABELS = ["MiniGrid (Discrete)", "Gymnasium (Continuous)", "DMControl (Visual)"]
-DISTANCES  = ["distance_min", "distance_med", "distance_max"]
+FAMILIES = ["minigrid", "gymnasium", "dmcontrol"]
+FAM_LABELS = ["MiniGrid (Discrete)", "Gymnasium (Continuous)",
+              "DMControl (Visual)"]
+DISTANCES = ["distance_min", "distance_med", "distance_max"]
+METRICS = [("pf", "PF (prediction fidelity)"),
+           ("rd", "RD (rollout divergence)")]
 
-# Compute Gymnasium d_param values for X-axis
-gym_cfg = OmegaConf.load("configs/benchmark/gymnasium.yaml")
-gym_xvals = []
-for dist in DISTANCES:
-    seq = gym_cfg.benchmark.sequences[dist]
-    d = compute_d_param(dict(seq.task_A.params), dict(seq.task_B.params))
-    gym_xvals.append(round(d, 3))
-print(f"Gymnasium d_param values: {gym_xvals}")
 
-# --- Load results ---
-def load_wmf(method, family, distance):
-    files = list(Path("results").glob(
-        f"{method}/{family}_{distance}_*/metrics.json"))
-    if not files:
+def cell(results_root, method, family, distance, key):
+    """(mean, std) of `key` over the seeds of one cell, or (None, None)."""
+    values = []
+    for path in results_root.glob(f"{method}/{family}_{distance}_*/metrics.json"):
+        value = json.load(open(path)).get(key)
+        if value is not None:
+            values.append(value)
+    if not values:
         return None, None
-    vals = [json.load(open(f))["wmf"] for f in files]
-    return np.mean(vals), np.std(vals)
+    return float(np.mean(values)), float(np.std(values))
 
-# --- Plot ---
-fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
-fig.subplots_adjust(wspace=0.35)
 
-for ax_i, (family, fam_label) in enumerate(zip(FAMILIES, FAM_LABELS)):
-    ax = axes[ax_i]
+def distance_axis(results_root, family):
+    """
+    (x positions, tick labels, axis label) for one family.
 
-    # X-axis values
-    if family == "gymnasium":
-        xvals  = gym_xvals
-        xlabel = "Dynamic distance $d_{param}$"
-        xticks = gym_xvals
-        xticklabels = [f"{v:.3f}" for v in gym_xvals]
-    else:
-        xvals  = [1, 2, 3]
-        xlabel = "Dynamic distance level"
-        xticks = [1, 2, 3]
-        xticklabels = ["Min", "Med", "Max"]
+    d_trans is a property of the task pair, so it is read from whichever runs
+    of that family carry it, regardless of method.
+    """
+    xs = []
+    for distance in DISTANCES:
+        values = [
+            json.load(open(path)).get("d_trans")
+            for path in results_root.glob(f"*/{family}_{distance}_*/metrics.json")
+        ]
+        values = [v for v in values if v is not None]
+        xs.append(float(np.mean(values)) if values else None)
 
-    for m_i, (method, label) in enumerate(zip(METHODS, LABELS)):
-        means, stds, xs = [], [], []
-        for x, dist in zip(xvals, DISTANCES):
-            mean, std = load_wmf(method, family, dist)
-            if mean is not None:
-                means.append(mean)
-                stds.append(std)
-                xs.append(x)
-        if not means:
-            continue
-        ax.errorbar(
-            xs, means, yerr=stds,
-            label=label,
-            color=COLORS[m_i],
-            linestyle=LINES[m_i],
-            marker=MARKERS[m_i],
-            linewidth=LW[m_i],
-            markersize=6,
-            capsize=4,
-            zorder=5 if method == "ug_mtm" else 2
-        )
+    if all(x is not None for x in xs):
+        return xs, [f"{x:.2f}" for x in xs], "Dynamic distance $d_{trans}$"
+    return [1, 2, 3], ["Min", "Med", "Max"], "Dynamic distance level"
 
-    ax.axhline(0, color="gray", linewidth=0.8, linestyle=":", alpha=0.6)
-    ax.set_title(fam_label, fontsize=13, fontweight="bold", pad=8)
-    ax.set_xlabel(xlabel, fontsize=10)
-    ax.set_ylabel("WMF (World Model Forgetting)" if ax_i == 0 else "", fontsize=10)
-    ax.set_xticks(xticks)
-    ax.set_xticklabels(xticklabels, fontsize=9)
-    ax.grid(True, alpha=0.25, linestyle="--")
-    ax.tick_params(labelsize=9)
 
-    # Independent Y-axis: auto-scale per panel with 10% padding
-    ax.autoscale(axis="y")
-    ymin, ymax = ax.get_ylim()
-    pad = (ymax - ymin) * 0.15
-    ax.set_ylim(ymin - pad, ymax + pad)
+def draw(results_root, out_dir, stem):
+    fig, axes = plt.subplots(len(METRICS), len(FAMILIES),
+                             figsize=(14, 4.2 * len(METRICS)))
+    axes = np.atleast_2d(axes)
+    fig.subplots_adjust(wspace=0.35, hspace=0.35)
 
-# Shared legend below figure
-handles, labels_leg = axes[0].get_legend_handles_labels()
-fig.legend(
-    handles, labels_leg,
-    loc="lower center",
-    ncol=5,
-    fontsize=9,
-    frameon=True,
-    bbox_to_anchor=(0.5, -0.12),
-)
+    for col, (family, fam_label) in enumerate(zip(FAMILIES, FAM_LABELS)):
+        xvals, xticklabels, xlabel = distance_axis(results_root, family)
 
-Path("results/figures").mkdir(parents=True, exist_ok=True)
-fig.savefig("results/figures/figurasfinalv2.pdf",
-            bbox_inches="tight", dpi=150)
-fig.savefig("results/figures/figurasfinalv2.png",
-            bbox_inches="tight", dpi=150)
-print("Saved: results/figures/figurasfinalv2.pdf")
-print("Saved: results/figures/figurasfinalv2.png")
+        for row, (key, metric_label) in enumerate(METRICS):
+            ax = axes[row][col]
+            for i, (method, label) in enumerate(zip(METHODS, LABELS)):
+                means, stds, xs = [], [], []
+                for x, distance in zip(xvals, DISTANCES):
+                    mean, std = cell(results_root, method, family, distance, key)
+                    if mean is not None:
+                        means.append(mean)
+                        stds.append(std)
+                        xs.append(x)
+                if not means:
+                    continue
+                ax.errorbar(
+                    xs, means, yerr=stds, label=label,
+                    color=COLORS[i], linestyle=LINES[i], marker=MARKERS[i],
+                    linewidth=LW[i], markersize=6, capsize=4,
+                    zorder=5 if method == "ug_mtm" else 2,
+                )
 
-# --- Print full results table ---
-print("\nFULL RESULTS TABLE (mean WMF, 5 seeds)")
-print(f"{'Method':<22}", end="")
-for fam in FAMILIES:
-    for dist in ["min","med","max"]:
-        print(f" {fam[:3]}_{dist[:3]}", end="")
-print()
-for method, label in zip(METHODS, LABELS):
-    print(f"{label:<22}", end="")
-    for family in FAMILIES:
-        for distance in DISTANCES:
-            mean, std = load_wmf(method, family, distance)
-            if mean is not None:
-                print(f" {mean:+.4f}", end="")
-            else:
-                print(f"    N/A", end="")
-    print()
+            # Zero is the no-forgetting line for both metrics, and PF goes
+            # negative often enough that it has to be visible.
+            ax.axhline(0, color="gray", linewidth=0.8, linestyle=":", alpha=0.6)
+            if row == 0:
+                ax.set_title(fam_label, fontsize=13, fontweight="bold", pad=8)
+            ax.set_xlabel(xlabel, fontsize=10)
+            ax.set_ylabel(metric_label if col == 0 else "", fontsize=10)
+            ax.set_xticks(xvals)
+            ax.set_xticklabels(xticklabels, fontsize=9)
+            ax.grid(True, alpha=0.25, linestyle="--")
+            ax.tick_params(labelsize=9)
+            # Independent Y axis per panel: PF and RD differ by an order of
+            # magnitude, which is the whole reason they are not aggregated.
+            ax.autoscale(axis="y")
+            ymin, ymax = ax.get_ylim()
+            pad = (ymax - ymin) * 0.15
+            ax.set_ylim(ymin - pad, ymax + pad)
+
+    handles, legend_labels = axes[0][0].get_legend_handles_labels()
+    if handles:
+        fig.legend(handles, legend_labels, loc="lower center", ncol=5,
+                   fontsize=9, frameon=True, bbox_to_anchor=(0.5, -0.06))
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = [out_dir / f"{stem}.pdf", out_dir / f"{stem}.png"]
+    for path in paths:
+        fig.savefig(path, bbox_inches="tight", dpi=150)
+        print(f"Saved: {path}")
+    plt.close(fig)
+    return paths
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--results-dir", default="results", type=Path)
+    parser.add_argument("--out", default=Path("results/figures"), type=Path)
+    parser.add_argument("--stem", default="forgetting_vs_distance",
+                        help="basename of the .pdf and .png written")
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    if not any(args.results_dir.glob("*/*/metrics.json")):
+        raise SystemExit(f"no metrics.json found under {args.results_dir}")
+    draw(args.results_dir, args.out, args.stem)
+    print("Tables come from summarize_results.py, not from here.")
+
+
+if __name__ == "__main__":
+    main()

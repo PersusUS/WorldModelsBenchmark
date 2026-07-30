@@ -157,6 +157,119 @@ def test_ewc_fisher_is_non_trivial_for_transition_params(latent_dataset, device)
     assert fisher["stoch_fc.weight"].sum().item() > 0
 
 
+def _transition_nll(model, obs, actions, next_obs):
+    """-log P(z' | z, a), per sample, exactly as EWC's Fisher defines it."""
+    h = torch.zeros(obs.shape[0], model.hidden_dim)
+    h_next = model.rssm.transition(h, obs, actions)
+    mu, log_sigma = model.rssm.predict_stoch(h_next)
+    log_prob = -0.5 * torch.sum(
+        torch.log(2 * torch.tensor(torch.pi))
+        + log_sigma
+        + (next_obs - mu).pow(2) / (log_sigma.exp() + 1e-8),
+        dim=-1,
+    )
+    return -log_prob
+
+
+def _squared_grads(model, loss):
+    model.rssm.zero_grad()
+    loss.backward()
+    # The VAE parameters get no gradient from a transition-only likelihood.
+    return {
+        name: (torch.zeros_like(param) if param.grad is None
+               else param.grad.detach().pow(2))
+        for name, param in model.rssm.named_parameters()
+    }
+
+
+def test_ewc_fisher_is_the_mean_of_squared_per_sample_gradients(
+        latent_dataset, device):
+    """F = E[g^2] over single transitions, computed here from scratch."""
+    model = build(EWCWorldModel)
+    model.consolidate(latent_dataset, device)
+    fisher = model._fisher_diags[0]
+
+    n = latent_dataset["obs"].shape[0]
+    expected = {
+        name: torch.zeros_like(param)
+        for name, param in model.rssm.named_parameters()
+    }
+    for i in range(n):
+        nll = _transition_nll(
+            model,
+            latent_dataset["obs"][i:i + 1],
+            latent_dataset["actions"][i:i + 1],
+            latent_dataset["next_obs"][i:i + 1],
+        ).squeeze(0)
+        for name, squared in _squared_grads(model, nll).items():
+            expected[name] += squared / n
+
+    for name, value in expected.items():
+        assert torch.allclose(fisher[name], value, atol=1e-10)
+
+
+def test_ewc_fisher_keeps_the_gradient_variance(latent_dataset, device):
+    """Regression for I3: the Fisher was (E[g])^2, which throws away Var[g].
+
+    Squaring a mini-batch gradient keeps only the component that survives
+    averaging. E[g^2] = (E[g])^2 + Var[g], and on real data the variance term
+    dominates — so the buggy estimator underweighted every parameter, letting
+    EWC's penalty collapse towards a no-op.
+    """
+    model = build(EWCWorldModel)
+    model.consolidate(latent_dataset, device)
+    fisher = model._fisher_diags[0]
+
+    batch_nll = _transition_nll(
+        model,
+        latent_dataset["obs"],
+        latent_dataset["actions"],
+        latent_dataset["next_obs"],
+    ).mean()
+    batch_squared = _squared_grads(model, batch_nll)
+
+    for name, value in fisher.items():
+        # Jensen: the per-sample Fisher can never fall below (E[g])^2.
+        assert torch.all(value >= batch_squared[name] - 1e-10)
+
+    # And on the transition parameters it must be far above it, not equal.
+    for name in ("gru.weight_ih", "stoch_fc.weight"):
+        assert fisher[name].sum() > 5.0 * batch_squared[name].sum()
+
+
+def test_ewc_fisher_is_zero_on_the_encoder(latent_dataset, device):
+    """EWC protects M and nothing else, and the Fisher says so out loud.
+
+    The Fisher is defined over log P(z'|z, a), which the VAE parameters do not
+    enter, so their Fisher is exactly zero and the penalty never constrains
+    them. This is why EWC's pixel-space reconstruction of task A degrades just
+    like fine-tuning's (F18/P9): the encoder is outside its scope by
+    construction, not by accident.
+    """
+    model = build(EWCWorldModel)
+    model.consolidate(latent_dataset, device)
+    fisher = model._fisher_diags[0]
+
+    encoder = [name for name in fisher if name.startswith("vae.")]
+    assert encoder, "the RSSM is expected to own the VAE"
+    for name in encoder:
+        assert torch.all(fisher[name] == 0)
+
+
+def test_ewc_fisher_is_zero_on_the_recurrent_weights(latent_dataset, device):
+    """Known limitation, locked in so it cannot change silently.
+
+    The Fisher set is single transitions started from h = 0, so `gru.weight_hh`
+    contributes nothing to the likelihood and receives no Fisher mass: the
+    recurrent pathway is unprotected. compute_nll scores from h = 0 too, so PF
+    cannot see it either — but RD rolls out 15 steps and does.
+    """
+    model = build(EWCWorldModel)
+    model.consolidate(latent_dataset, device)
+    assert torch.all(model._fisher_diags[0]["gru.weight_hh"] == 0)
+    assert model._fisher_diags[0]["gru.weight_ih"].sum() > 0
+
+
 def test_ewc_penalty_stays_zero_at_the_consolidated_optimum(latent_dataset, device):
     model = build(EWCWorldModel)
     model.consolidate(latent_dataset, device)

@@ -50,6 +50,13 @@ class EWCWorldModel(BaseWorldModel, nn.Module):
         The Fisher diagonal is the expected squared gradient of the task
         log-likelihood, so it has to be estimated on real task data: computed
         on noise it encodes no information about which parameters matter.
+
+        The expectation is over *per-sample* gradients — E[g^2], not (E[g])^2.
+        Squaring a mini-batch gradient measures only the part of the gradient
+        that survives averaging, and the two differ by exactly the gradient
+        variance, which is where most of the Fisher signal lives. Hence the
+        per-sample loop below: one backward pass per transition, which at the
+        Fisher subset sizes used here (tens of transitions) costs nothing.
         """
         if "next_obs" not in dataset:
             raise KeyError(
@@ -76,19 +83,15 @@ class EWCWorldModel(BaseWorldModel, nn.Module):
         next_obs = dataset["next_obs"].to(device)
         N = obs.shape[0]
 
-        # Use mini-batches to compute Fisher
-        batch_size = min(32, N)
-        n_batches = max(1, N // batch_size)
+        # One transition at a time: the Fisher is an average of squared
+        # per-sample gradients, and mini-batching would average the gradients
+        # before squaring them.
+        for i in range(N):
+            obs_b = obs[i:i + 1]
+            actions_b = actions[i:i + 1]
+            next_b = next_obs[i:i + 1]
 
-        self.rssm.train()
-        for i in range(n_batches):
-            start = i * batch_size
-            end = min(start + batch_size, N)
-            obs_b = obs[start:end]
-            actions_b = actions[start:end]
-            next_b = next_obs[start:end]
-
-            h = torch.zeros(obs_b.shape[0], self.hidden_dim, device=device)
+            h = torch.zeros(1, self.hidden_dim, device=device)
             h_next = self.rssm.transition(h, obs_b, actions_b)
             mu, log_sigma = self.rssm.predict_stoch(h_next)
 
@@ -100,14 +103,14 @@ class EWCWorldModel(BaseWorldModel, nn.Module):
                 + (next_b - mu).pow(2) / (sigma.pow(2) + 1e-8),
                 dim=-1,
             )
-            loss = -log_prob.mean()
+            loss = -log_prob.squeeze(0)
 
             self.rssm.zero_grad()
             loss.backward()
 
             for name, param in self.rssm.named_parameters():
                 if param.grad is not None:
-                    fisher[name] += param.grad.data.pow(2) / n_batches
+                    fisher[name] += param.grad.data.pow(2) / N
 
         self._fisher_diags.append(fisher)
         self.rssm.eval()

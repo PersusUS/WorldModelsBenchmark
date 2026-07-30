@@ -39,14 +39,20 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from experiments.run_full_benchmark import DISTANCES, FAMILY_CONFIGS, METHODS
 
-# Forgetting metrics, then the task-A quality columns F17 added.
-DEFAULT_METRICS = ["wmf", "pf", "rd", "ft"]
+# What the benchmark reports. PF and RD are the forgetting metrics and they are
+# printed side by side rather than folded into WMF: they live on different
+# scales and RD alone supplies 78-97% of the aggregate, so a single WMF column
+# is a report on RD wearing a suit (F14/P7). WMF is still printed, below, under
+# a heading that says what it is. FT is forward transfer measured against a
+# model trained on task B from scratch (F20/P10).
+DEFAULT_METRICS = ["pf", "rd", "ft"]
 # family[:3] would abbreviate minigrid to "min", and a column headed "min_med"
 # reads as "minimum median" rather than "MiniGrid, medium distance".
 FAMILY_ABBREV = {"minigrid": "mgrid", "gymnasium": "gym", "dmcontrol": "dmc"}
 QUALITY_COLUMNS = [
     ("heldout_reconstruction_A_after_task_A", "recon A|after A"),
     ("heldout_reconstruction_A_after_task_B", "recon A|after B"),
+    ("heldout_reconstruction_B_after_task_B", "recon B|after B"),
     ("final_reconstruction_loss_A", "train recon A"),
     ("final_reconstruction_loss_B", "train recon B"),
 ]
@@ -78,12 +84,17 @@ def shared_protocol(runs: list):
 
 def cell_values(runs: list, method: str, family: str, distance: str,
                 key: str) -> dict:
-    """{seed: value} for one cell, skipping runs that lack the key."""
+    """
+    {seed: value} for one cell, skipping runs that lack the key.
+
+    A stored null counts as absent: ft and d_trans are null in runs made with
+    --skip-reference, and averaging them in as zero would invent a result.
+    """
     return {
         r["seed"]: r[key]
         for r in runs
         if r.get("method") == method and r.get("family") == family
-        and r.get("distance") == distance and key in r
+        and r.get("distance") == distance and r.get(key) is not None
     }
 
 
@@ -154,6 +165,83 @@ def print_metric_table(runs, methods, families, distances, key):
                     cell = "N/A"
                 row += f" | {cell:>17}"
         print(row)
+    print()
+
+
+def rd_share(runs, method, family, distance, weights=(0.4, 0.4)):
+    """
+    Fraction of |alpha*PF + beta*RD| that RD contributes, averaged over seeds.
+
+    This is the number behind P7: if it sits near 1, WMF is RD with extra
+    steps, and reporting the aggregate as a single headline hides which metric
+    discriminates.
+    """
+    alpha, beta = weights
+    pf = cell_values(runs, method, family, distance, "pf")
+    rd = cell_values(runs, method, family, distance, "rd")
+    shares = []
+    for seed in sorted(set(pf) & set(rd)):
+        total = abs(alpha * pf[seed]) + abs(beta * rd[seed])
+        if total > 0:
+            shares.append(abs(beta * rd[seed]) / total)
+    return float(np.mean(shares)) if shares else float("nan")
+
+
+def print_aggregate_section(runs, methods, families, distances):
+    """WMF, plus the diagnostic that says how much of it is RD."""
+    print("=" * 78)
+    print("LEGACY AGGREGATE (Eq. 6): WMF = 0.4*PF + 0.4*RD + 0.2*PIS, with PIS")
+    print("hardcoded to 0. Printed for continuity with the paper, not as the")
+    print("headline number - the share column says why.")
+    print("=" * 78)
+    print_metric_table(runs, methods, families, distances, "wmf")
+
+    print("share of |WMF| contributed by RD:")
+    header = f"{'':<20}"
+    for family in families:
+        for distance in distances:
+            col = f"{FAMILY_ABBREV.get(family, family[:5])}_{distance.split('_')[1]}"
+            header += f" | {col:>17}"
+    print(header)
+    print("-" * len(header))
+    for method in methods:
+        row = f"{method:<20}"
+        for family in families:
+            for distance in distances:
+                share = rd_share(runs, method, family, distance)
+                cell = "N/A" if np.isnan(share) else f"{100 * share:.1f}%"
+                row += f" | {cell:>17}"
+        print(row)
+    print()
+
+
+def print_distance_table(runs, families, distances):
+    """
+    d_trans per (family, distance): Eq. 9, between one model per environment.
+
+    It is a property of the task pair and the seed, not of the method, so every
+    method's cell stores the same value and this table collapses them.
+    """
+    values = {}
+    for family in families:
+        for distance in distances:
+            per_seed = {r["seed"]: r["d_trans"] for r in runs
+                        if r.get("family") == family
+                        and r.get("distance") == distance
+                        and r.get("d_trans") is not None}
+            if per_seed:
+                values[(family, distance)] = list(per_seed.values())
+    if not values:
+        return
+
+    print("=" * 78)
+    print("DYNAMIC DISTANCE d_trans (Eq. 9): KL between the transition models")
+    print("of two environments, each trained on its own task from scratch.")
+    print("=" * 78)
+    for (family, distance), vals in values.items():
+        print(f"  {family:<10} {distance:<14} "
+              f"d_trans = {np.mean(vals):8.4f} +- {np.std(vals):.4f} "
+              f"(n={len(vals)})")
     print()
 
 
@@ -229,16 +317,24 @@ def main(argv=None):
 
     print("\n" + "=" * 78)
     print("FORGETTING METRICS (mean +- std across seeds)")
+    print("PF and RD are measured on latents encoded once by the post-task-A")
+    print("model, so they score the transition component M in a fixed latent")
+    print("basis and are blind to drift in the encoder itself (F18). The pixel")
+    print("columns further down are the scale that sees it.")
     print("=" * 78)
     for key in args.metrics:
         print_metric_table(runs, methods, families, distances, key)
 
+    print_aggregate_section(runs, methods, families, distances)
+    print_distance_table(runs, families, distances)
+
     print("=" * 78)
-    print("TASK-A QUALITY (F17/F18): was there anything to forget, and did the")
-    print("metrics above see it? Reconstruction is squared error per frame.")
+    print("TASK QUALITY IN PIXELS (F17/F18): was there anything to forget, and")
+    print("did the metrics above see it? Squared error per held-out frame, the")
+    print("one scale that is comparable across models and across budgets.")
     print("=" * 78)
     for key, label in QUALITY_COLUMNS:
-        if any(key in r for r in runs):
+        if any(r.get(key) is not None for r in runs):
             print_metric_table(runs, methods, families, distances, key)
 
     nan_runs = [r for r in runs

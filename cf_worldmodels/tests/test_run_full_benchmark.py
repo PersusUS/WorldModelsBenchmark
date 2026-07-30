@@ -17,8 +17,10 @@ from experiments.run_full_benchmark import (
     PROTOCOL_FIELDS,
     check_protocol_consistency,
     create_model,
+    load_reference,
     parse_args,
     protocol_overrides,
+    reference_path,
     resolve_protocol,
 )
 
@@ -214,6 +216,48 @@ def test_results_without_a_recorded_protocol_stop_the_run(tmp_path, cfg):
         check_protocol_consistency([path], resolve_protocol(cfg))
 
 
+# --- the from-scratch task-B reference (P8/P10) -----------------------------
+
+def _write_reference(root, protocol, **extra):
+    path = reference_path(root, "minigrid", "distance_min", 0)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"d_trans": 1.5, "heldout_reconstruction_B_from_scratch": 9.0,
+               "protocol": protocol}
+    payload.update(extra)
+    path.write_text(json.dumps(payload))
+    return path
+
+
+def test_missing_reference_is_not_an_error(tmp_path, cfg):
+    """--skip-reference is allowed; the cell then stores ft and d_trans null."""
+    assert load_reference(tmp_path, "minigrid", "distance_min", 0,
+                          resolve_protocol(cfg)) is None
+
+
+def test_reference_is_read_back(tmp_path, cfg):
+    protocol = resolve_protocol(cfg)
+    _write_reference(tmp_path, protocol)
+    stored = load_reference(tmp_path, "minigrid", "distance_min", 0, protocol)
+    assert stored["d_trans"] == 1.5
+
+
+def test_reference_from_another_protocol_stops_the_run(tmp_path, cfg):
+    """The from-scratch arm is only a counterfactual at the same budget."""
+    protocol = resolve_protocol(cfg)
+    _write_reference(tmp_path, dict(protocol, n_train=protocol["n_train"] * 2))
+    with pytest.raises(SystemExit, match="different protocol"):
+        load_reference(tmp_path, "minigrid", "distance_min", 0, protocol)
+
+
+def test_reference_is_shared_by_every_method(tmp_path, cfg):
+    """One path per (family, distance, seed): d_trans is a property of the task
+    pair, not of the continual-learning method."""
+    paths = {reference_path(tmp_path, "minigrid", "distance_min", 0)
+             for _ in runner.METHODS}
+    assert len(paths) == 1
+    assert "_reference" in str(paths.pop())
+
+
 # --- command line ----------------------------------------------------------
 
 def test_no_flags_means_the_config_decides():
@@ -243,3 +287,9 @@ def test_selection_flags_default_to_the_whole_grid():
     assert args.families == list(FAMILY_CONFIGS)
     assert args.methods == runner.METHODS
     assert args.distances == runner.DISTANCES
+
+
+def test_the_reference_runs_by_default():
+    """Forward transfer and d_trans are part of the benchmark, not an extra."""
+    assert parse_args([]).skip_reference is False
+    assert parse_args(["--skip-reference"]).skip_reference is True

@@ -11,7 +11,9 @@ import numpy as np
 import pytest
 
 from experiments.summarize_results import (
+    DEFAULT_METRICS,
     cell_values,
+    rd_share,
     effect_size,
     load_runs,
     paired_differences,
@@ -93,6 +95,47 @@ def test_missing_key_is_skipped_not_defaulted():
                                              "seed": 1}]
     assert cell_values(runs, "finetuning", "minigrid", "distance_med",
                        "wmf") == {0: 1.0}
+
+
+def test_null_values_are_skipped_like_missing_ones():
+    """ft and d_trans are null in runs made with --skip-reference. Averaging a
+    null in as zero would invent a measurement that was never taken."""
+    runs = [make_run("finetuning", 0, 1.0, ft=3.0),
+            make_run("finetuning", 1, 1.0, ft=None)]
+    assert cell_values(runs, "finetuning", "minigrid", "distance_med",
+                       "ft") == {0: 3.0}
+
+
+# --- the aggregate, and how much of it is RD (P7) --------------------------
+
+def test_default_tables_lead_with_the_components_not_the_aggregate():
+    """PF and RD are the reported metrics; WMF gets its own labelled section."""
+    assert DEFAULT_METRICS[:2] == ["pf", "rd"]
+    assert "wmf" not in DEFAULT_METRICS
+
+
+def test_rd_share_is_one_when_pf_is_zero():
+    runs = [make_run("finetuning", 0, 1.0, pf=0.0, rd=20.0)]
+    assert rd_share(runs, "finetuning", "minigrid",
+                    "distance_med") == pytest.approx(1.0)
+
+
+def test_rd_share_is_half_when_the_two_contribute_equally():
+    runs = [make_run("finetuning", 0, 1.0, pf=5.0, rd=5.0)]
+    assert rd_share(runs, "finetuning", "minigrid",
+                    "distance_med") == pytest.approx(0.5)
+
+
+def test_rd_share_uses_magnitudes_so_a_negative_pf_cannot_inflate_it():
+    """PF goes negative on fine-tuning (F18); signed sums would cancel and
+    report a share above 1."""
+    runs = [make_run("finetuning", 0, 1.0, pf=-5.0, rd=5.0)]
+    assert rd_share(runs, "finetuning", "minigrid",
+                    "distance_med") == pytest.approx(0.5)
+
+
+def test_rd_share_is_nan_without_data():
+    assert np.isnan(rd_share([], "finetuning", "minigrid", "distance_med"))
 
 
 # --- pairing ---------------------------------------------------------------

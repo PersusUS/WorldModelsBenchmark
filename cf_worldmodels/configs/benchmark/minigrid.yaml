@@ -29,7 +29,8 @@ benchmark:
 # paper must be generated from the results, never written by hand.
 protocol:
   n_collect: 20            # episodes collected per task, random policy
-  n_train: 1000            # gradient updates per task
+  n_train: 5000            # gradient updates per task; 5x the smoke budget,
+                           # the knee of the task-A convergence curve (R11)
   batch_size: 8
   seq_len: 5
   learning_rate: 1.0e-3

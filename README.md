@@ -72,6 +72,17 @@ in the paper is generated from the results rather than written by hand. Runs
 cached under a different protocol are refused rather than silently averaged into
 the same cell.
 
+Before the five methods of a cell, the runner trains the pair of reference models
+that forward transfer and `d_trans` are defined against: one plain RSSM per
+environment, from scratch, per (family, distance, seed). They are cached in
+`results/_reference/` and shared by every method, since neither quantity depends
+on the continual-learning method. To skip them — `ft` and `d_trans` are then
+stored as `null`, never as 0:
+
+```bash
+python experiments/run_full_benchmark.py --skip-reference
+```
+
 Print the effective protocol and the run plan without training anything:
 
 ```bash
@@ -92,8 +103,8 @@ training budget (one run at the largest budget, evaluated at each multiple of
 python experiments/convergence_A.py --family minigrid --multipliers 1 2 5 10
 ```
 
-Regenerate the paper figure and the results table from the stored metrics
-(no training required):
+Regenerate the figure from the stored metrics (no training required). Note that
+`plot_final.py` still reads `wmf`, which is no longer the reported number:
 
 ```bash
 python experiments/plot_final.py
@@ -161,11 +172,18 @@ files, which are.
 - **PIS** (Policy Impact Score) — reserved in the metrics schema; reported as
   `0.0` in this release (see Known limitations).
 - **WMF** = `alpha*PF + beta*RD + gamma*PIS`, with `alpha=beta=0.4, gamma=0.2`.
-- **FT** — `NLL(random init, D_i) - NLL(post-task-i model, D_i)`. Reported under
-  the name Forward Transfer, but read the fourth Known limitation before using
-  it as one: no task-B data enters the computation, so it cannot distinguish
-  continual-learning methods that share an architecture. It is a measure of how
-  well task *i* was learned.
+  Computed and stored, but **not the headline number**: PIS is a hardcoded zero
+  and RD supplies 78-97% of the rest, so `summarize_results.py` reports PF and RD
+  side by side and prints WMF under a heading that says what it is, next to the
+  share of it that comes from RD.
+- **FT** (Forward Transfer) — `recon_B(trained from scratch) -
+  recon_B(pretrained on A)`, on held-out task-B frames in pixel space. Positive
+  means knowledge of task A helped learn task B under the same budget and the
+  same data. The from-scratch arm comes from a reference model trained on task B
+  alone, one per (family, distance, seed), shared by all five methods.
+- **`task_A_fit_gain`** — `NLL(random init, D_i) - NLL(post-task-i model, D_i)`.
+  This is what earlier releases called FT; it measures how well task *i* was
+  learned, and no task-B data enters it.
 
 All of these are evaluated on `D_i`: held-out task-A rollouts, collected
 separately from the training buffer and encoded once by the post-task-A model
@@ -181,14 +199,20 @@ because a forgetting benchmark has to show there was something to forget:
   This is the only quality signal that is comparable across training budgets: the
   latent NLL is scored against latents the model itself produces, and that target
   moves as the encoder trains.
+- `heldout_reconstruction_B_after_task_B` and
+  `heldout_reconstruction_B_from_scratch` — the two arms of FT.
 - `nll_A_after_task_A`, `nll_A_after_task_B`, `nll_A_random_init` — the three
-  NLLs that PF and FT are built from, so both stay decomposable.
+  NLLs that PF and `task_A_fit_gain` are built from, so both stay decomposable.
 - `initial/final_reconstruction_loss_A` and `_B`, plus a 20-point curve for each
   task, and `n_nan_steps_A/B` for steps dropped as non-finite.
 
 Dynamic distance between two tasks is measured by `d_param` (normalized L2
-distance between physics parameter vectors, Gymnasium family only) and
-`d_trans` (expected KL between the two trained transition models, all families).
+distance between physics parameter vectors, for the variable-physics pairs) and
+`d_trans` (Eq. 9: expected KL between one transition model per environment, each
+trained on its own task from scratch, all families). `d_trans` is a property of
+the task pair and the seed rather than of the method, so it is computed once per
+(family, distance, seed) alongside the forward-transfer reference and stored in
+`results/_reference/`.
 
 ## Tests
 
@@ -196,7 +220,7 @@ distance between physics parameter vectors, Gymnasium family only) and
 python -m pytest
 ```
 
-291 tests covering the models, baselines, metrics, distances, buffer,
+331 tests covering the models, baselines, metrics, distances, buffer,
 checkpoint format, seeding, protocol resolution and config consistency. The 25 tests marked
 `integration` build real MiniGrid / MuJoCo / dm_control environments; skip them
 with:
@@ -230,27 +254,33 @@ aware of before building on it.
    `heldout_reconstruction_A_after_task_{A,B}` so both can be read side by side.
 
 3. **The training scale is small.** 20 episodes of a random policy per task and
-   1000 gradient updates at batch 8, sequence length 5; UG-MTM's training-time
+   5000 gradient updates at batch 8, sequence length 5; UG-MTM's training-time
    MC-dropout budget is 3 passes. Every one of those values is declared in the
    `protocol:` block of the family config, recorded in each `metrics.json`, and
    printed before training. Task A does get learned at this scale — held-out
    reconstruction reaches 5.3e-04 per pixel, RMSE ≈ 0.023 on `[0,1]` — and
    `experiments/convergence_A.py` measures how that changes with the budget.
 
-4. **FT does not measure forward transfer.** It is computed from the post-task-i
-   model on task-i data, so no task-B data enters it. Methods that share an
-   architecture and differ only at the task switch — fine-tuning, replay, EWC —
-   therefore get **identical** FT by construction: measured across 5 seeds and
-   two distance levels, fine-tuning and infinite replay differ by exactly 0.000
-   in all 10 runs. The quantity is still useful (it is the evidence that task A
-   was learned at all, stored as `nll_A_after_task_A` and `nll_A_random_init`),
-   but the label is wrong and any conclusion drawn from comparing FT across
-   same-architecture methods is unsupported.
+4. **Forward transfer is measured in pixels, and replay's number needs a
+   caveat.** The two arms of FT are models with unrelated latent bases, so a
+   latent NLL would score one of them in the other's coordinates; held-out pixel
+   reconstruction is the one scale they share. Separately, `replay_infinite`
+   trains on A+B during the task-B phase, so half of its gradient steps go to
+   task-A data: its FT mixes transfer with a halved effective budget on B.
 
-5. **The DMControl `distance_min` pair is not actually two different tasks.**
-   Both `task_A` and `task_B` are `cheetah/run`; the `lateral_wind: true`
-   parameter that was meant to differentiate them is never read by
-   `DMControlEnv`, which only takes `domain_name` and `task_name`.
+   Earlier releases reported a quantity named FT that was computed from the
+   post-task-i model on task-i data alone. No task-B data entered it, so methods
+   sharing an architecture got **identical** values by construction — fine-tuning
+   and infinite replay differed by exactly 0.000 across 5 seeds and two distance
+   levels. That quantity is still stored, under the name `task_A_fit_gain`.
+
+5. **EWC protects the transition component and nothing else.** Its Fisher is
+   defined over `log P(z'|z, a)`, so it is exactly zero on every encoder
+   parameter: the penalty cannot constrain the VAE, and EWC's pixel-space
+   reconstruction of task A degrades like fine-tuning's. It is also zero on
+   `gru.weight_hh`, because the Fisher set is single transitions started from
+   `h = 0` — the recurrent pathway is unprotected, and `compute_nll` scores from
+   `h = 0` too, so PF does not see it either. RD, which rolls out 15 steps, does.
 
 6. **No ablation study ships with this release.** The previous
    `run_ablations.py` built an overridden config and then never passed it to

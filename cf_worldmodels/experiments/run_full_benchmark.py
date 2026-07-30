@@ -42,8 +42,15 @@ from src.benchmark.protocol import (
     collect_rollouts,
     evaluate_reconstruction,
 )
-from src.benchmark.metrics import compute_pf, compute_rd, compute_wmf, compute_ft, compute_nll
-from src.benchmark.distances import compute_d_param
+from src.benchmark.metrics import (
+    compute_pf,
+    compute_rd,
+    compute_wmf,
+    compute_task_A_fit_gain,
+    compute_forward_transfer,
+    compute_nll,
+)
+from src.benchmark.distances import compute_d_param, compute_d_trans
 from src.utils.logging_utils import save_metrics
 from src.utils.seeding import preserve_rng_state, set_seed
 
@@ -155,8 +162,12 @@ def create_env_pair(family, seq_cfg):
         env_A = GymnasiumEnv(seq_cfg.task_A.env_id, physics_params=params_A)
         env_B = GymnasiumEnv(seq_cfg.task_B.env_id, physics_params=params_B)
     elif family == "dmcontrol":
-        env_A = DMControlEnv(seq_cfg.task_A.domain_name, seq_cfg.task_A.task_name)
-        env_B = DMControlEnv(seq_cfg.task_B.domain_name, seq_cfg.task_B.task_name)
+        params_A = dict(seq_cfg.task_A.get("params", {}))
+        params_B = dict(seq_cfg.task_B.get("params", {}))
+        env_A = DMControlEnv(seq_cfg.task_A.domain_name,
+                             seq_cfg.task_A.task_name, physics_params=params_A)
+        env_B = DMControlEnv(seq_cfg.task_B.domain_name,
+                             seq_cfg.task_B.task_name, physics_params=params_B)
     return env_A, env_B
 
 
@@ -269,8 +280,135 @@ def switch_task(model, method, model_i, buf_A, buf_B, buf_A_heldout,
                 param.requires_grad_(False)
 
 
+def collect_cell_buffers(env_A, env_B, protocol):
+    """
+    The four buffers a cell needs, collected in a fixed order.
+
+    `run_cell` and `run_reference_cell` call this after seeding the two
+    environments identically, so both see byte-identical episodes: rollout
+    content depends only on the environments' own RNGs and on the order of
+    these calls. It never touches the global torch/numpy stream — all three
+    families sample actions from an environment-owned generator — which is why
+    a reference model trained in a separate pass is comparable with the cells.
+    """
+    buf_A = ReplayBuffer(max_episodes=protocol["n_collect"],
+                         seq_len=protocol["seq_len"])
+    buf_B = ReplayBuffer(max_episodes=protocol["n_collect"],
+                         seq_len=protocol["seq_len"])
+    buf_A_heldout = ReplayBuffer(max_episodes=protocol["n_eval_episodes"],
+                                 seq_len=2)
+    buf_B_heldout = ReplayBuffer(max_episodes=protocol["n_eval_episodes"],
+                                 seq_len=2)
+    collect_rollouts(env_A, buf_A, n_rollouts=protocol["n_collect"])
+    collect_rollouts(env_B, buf_B, n_rollouts=protocol["n_collect"])
+    collect_rollouts(env_A, buf_A_heldout, n_rollouts=protocol["n_eval_episodes"])
+    collect_rollouts(env_B, buf_B_heldout, n_rollouts=protocol["n_eval_episodes"])
+    return buf_A, buf_B, buf_A_heldout, buf_B_heldout
+
+
+def reference_path(results_root, family, distance, seed):
+    return results_root / "_reference" / f"{family}_{distance}_{seed}.json"
+
+
+def run_reference_cell(env_A, env_B, device, seed, family, distance, protocol,
+                       results_root):
+    """
+    Train the two from-scratch models the cells of this (family, distance,
+    seed) need, and store what they are needed for.
+
+    Two paper claims rest on a model that has seen exactly one task:
+
+      * `d_trans` (Eq. 9) is a KL between the transition models of two
+        *environments*, each trained on its own. Comparing the pre- and
+        post-switch snapshots instead would measure how far one model moved,
+        which is what RD already measures (F15/P8).
+      * Forward transfer needs the counterfactual "task B learned without
+        having seen task A" (F20/P10).
+
+    Both are properties of the task pair and the seed, not of the continual
+    learning method, so this runs once per (family, distance, seed) and every
+    method's cell reads the same numbers back. Plain RSSMs are used for the
+    same reason.
+    """
+    set_seed(seed)
+    env_A.seed(seed)
+    env_B.seed(seed + 1)
+
+    buf_A, buf_B, buf_A_heldout, buf_B_heldout = collect_cell_buffers(
+        env_A, env_B, protocol)
+
+    action_dim = env_A.action_dim
+    model_A = create_model("finetuning", action_dim, protocol).to(device)
+    stats_A = train_task(
+        model_A, buf_A,
+        torch.optim.Adam(model_A.parameters(), lr=protocol["learning_rate"]),
+        device, protocol,
+    )
+    model_B = create_model("finetuning", action_dim, protocol).to(device)
+    stats_B = train_task(
+        model_B, buf_B,
+        torch.optim.Adam(model_B.parameters(), lr=protocol["learning_rate"]),
+        device, protocol,
+    )
+
+    # d_trans is evaluated on task-A transitions, in model_A's latent basis:
+    # KL(P_A || P_B) is already asymmetric, and scoring it on the source task
+    # keeps it on the same (z, a) support as PF and RD.
+    shared_ds = build_latent_eval_dataset(
+        model_A, buf_A_heldout, device,
+        n_transitions=protocol["n_eval_transitions"], seed=seed,
+    )
+    d_trans = compute_d_trans(model_A, model_B, shared_ds, device)
+
+    reference = {
+        "d_trans": d_trans,
+        # The "no pretraining" arm of forward transfer: task-B quality reached
+        # from a random init under this exact budget and this exact data.
+        "heldout_reconstruction_B_from_scratch": evaluate_reconstruction(
+            model_B, buf_B_heldout, device,
+            n_frames=protocol["n_recon_frames"], seed=seed,
+        ),
+        # Task A from scratch, for the same reason PF has a random-init
+        # reference: it says whether the reference models trained at all.
+        "heldout_reconstruction_A_from_scratch": evaluate_reconstruction(
+            model_A, buf_A_heldout, device,
+            n_frames=protocol["n_recon_frames"], seed=seed,
+        ),
+        "final_reconstruction_loss_A": stats_A["final_reconstruction_loss"],
+        "final_reconstruction_loss_B": stats_B["final_reconstruction_loss"],
+        "n_nan_steps_A": stats_A["n_nan_steps"],
+        "n_nan_steps_B": stats_B["n_nan_steps"],
+        "family": family,
+        "distance": distance,
+        "seed": seed,
+        "protocol": protocol,
+    }
+    save_metrics(reference, reference_path(results_root, family, distance, seed))
+    return reference
+
+
+def load_reference(results_root, family, distance, seed, protocol):
+    """
+    The stored reference for this cell, or None if it was never computed.
+
+    A reference produced under a different protocol is refused for the same
+    reason cached cells are: the from-scratch arm of forward transfer is only a
+    counterfactual if it ran at the same budget.
+    """
+    path = reference_path(results_root, family, distance, seed)
+    if not path.exists():
+        return None
+    stored = json.load(open(path))
+    if stored.get("protocol") != protocol:
+        raise SystemExit(
+            f"{path} was produced under a different protocol than the one "
+            "requested. Archive or delete it before running."
+        )
+    return stored
+
+
 def run_cell(method, env_A, env_B, device, seed, family, distance, protocol,
-             results_root):
+             results_root, reference=None):
     """Train one (method, family, distance, seed) cell and write its metrics."""
     # Seeding the global RNGs is not enough: the environments own RNGs that no
     # global seed reaches, and cuDNN needs to be put in deterministic mode.
@@ -285,15 +423,8 @@ def run_cell(method, env_A, env_B, device, seed, family, distance, protocol,
     action_dim = env_A.action_dim
     model = create_model(method, action_dim, protocol).to(device)
 
-    buf_A = ReplayBuffer(max_episodes=protocol["n_collect"],
-                         seq_len=protocol["seq_len"])
-    buf_B = ReplayBuffer(max_episodes=protocol["n_collect"],
-                         seq_len=protocol["seq_len"])
-    buf_A_heldout = ReplayBuffer(max_episodes=protocol["n_eval_episodes"],
-                                 seq_len=2)
-    collect_rollouts(env_A, buf_A, n_rollouts=protocol["n_collect"])
-    collect_rollouts(env_B, buf_B, n_rollouts=protocol["n_collect"])
-    collect_rollouts(env_A, buf_A_heldout, n_rollouts=protocol["n_eval_episodes"])
+    buf_A, buf_B, buf_A_heldout, buf_B_heldout = collect_cell_buffers(
+        env_A, env_B, protocol)
 
     # Train Task A
     opt = torch.optim.Adam(model.parameters(), lr=protocol["learning_rate"])
@@ -359,7 +490,8 @@ def run_cell(method, env_A, env_B, device, seed, family, distance, protocol,
     # task-A fit regardless of when it is evaluated.
     nll_A_after_task_A = compute_nll(model_i, eval_ds, device)
     nll_A_random_init = compute_nll(model_rand, eval_ds, device)
-    ft = compute_ft(nll_A_after_task_A, nll_A_random_init)
+    task_A_fit_gain = compute_task_A_fit_gain(nll_A_after_task_A,
+                                              nll_A_random_init)
 
     with preserve_rng_state():
         nll_A_after_task_B = compute_nll(model, eval_ds, device)
@@ -367,14 +499,46 @@ def run_cell(method, env_A, env_B, device, seed, family, distance, protocol,
             model, buf_A_heldout, device,
             n_frames=protocol["n_recon_frames"], seed=seed,
         )
+        # Task-B quality, on the same held-out episodes and with the same
+        # estimator the reference used. This is the pretrained arm of forward
+        # transfer; the from-scratch arm comes out of run_reference_cell.
+        recon_B_after_task_B = evaluate_reconstruction(
+            model, buf_B_heldout, device,
+            n_frames=protocol["n_recon_frames"], seed=seed,
+        )
+
+    ft = None
+    d_trans = None
+    if reference is not None:
+        ft = compute_forward_transfer(
+            reference["heldout_reconstruction_B_from_scratch"],
+            recon_B_after_task_B,
+        )
+        d_trans = reference["d_trans"]
 
     metrics = {
-        # Forgetting metrics (Section 3.2). PIS is still unimplemented.
-        "wmf": wmf,
+        # Forgetting metrics (Section 3.2). PF and RD are what the benchmark
+        # reports; WMF is kept because it is the paper's Eq. 6, but it is an
+        # aggregate of components on different scales, of which RD supplies
+        # 78-97% and PIS a hardcoded zero (F14/P7). PIS is still unimplemented.
         "pf": pf,
         "rd": rd,
+        "wmf": wmf,
         "pis": 0.0,
+        # Forward transfer, measured against a model trained on task B from
+        # scratch (F20/P10). None when the reference for this cell was skipped.
         "ft": ft,
+        "heldout_reconstruction_B_after_task_B": recon_B_after_task_B,
+        "heldout_reconstruction_B_from_scratch": (
+            None if reference is None
+            else reference["heldout_reconstruction_B_from_scratch"]
+        ),
+        # Eq. 9, between one model per environment (F15/P8). A property of the
+        # task pair and the seed, copied into every method's cell so that the
+        # results directory stays self-contained.
+        "d_trans": d_trans,
+        # What used to be called FT. No task-B data enters it (F20).
+        "task_A_fit_gain": task_A_fit_gain,
         # The three NLLs on the held-out task-A set that PF and FT are built
         # from, stored so both are decomposable after the fact. For UG-MTM the
         # evaluation-time gate is stochastic, so pf differs from
@@ -459,6 +623,9 @@ def parse_args(argv=None):
     parser.add_argument("--results-dir", default="results", type=Path)
     parser.add_argument("--dry-run", action="store_true",
                         help="print the effective protocol and run plan, then exit")
+    parser.add_argument("--skip-reference", action="store_true",
+                        help="do not train the from-scratch task-B reference; "
+                             "cells then store ft and d_trans as null")
     # Protocol overrides. Anything left as None keeps the config's value.
     parser.add_argument("--steps", type=int, dest="n_train",
                         help="gradient updates per task (overrides n_train)")
@@ -528,6 +695,17 @@ def main(argv=None):
         check_protocol_consistency(family_cached, protocols[family])
 
     print(f"\n{len(planned)} cell(s) planned, {len(existing)} already cached.")
+    if args.skip_reference:
+        print("--skip-reference: ft and d_trans will be stored as null.")
+    else:
+        refs = {(family, distance, seed)
+                for family, distance, _method, seed in planned}
+        cached_refs = sum(
+            1 for family, distance, seed in refs
+            if reference_path(results_root, family, distance, seed).exists())
+        print(f"{len(refs)} reference model pair(s) planned "
+              f"(one per family/distance/seed, two trainings each), "
+              f"{cached_refs} already cached.")
     if args.dry_run:
         print("--dry-run: nothing was trained.")
         return
@@ -547,8 +725,31 @@ def main(argv=None):
                     f"{declared} but {family} exposes {env_A.action_dim}"
                 )
 
+            seeds = protocol["seeds"]
+            references = {}
+            for seed in seeds:
+                references[seed] = load_reference(results_root, family,
+                                                  distance, seed, protocol)
+                # Only train a missing reference if some cell still needs it.
+                # A cached cell is never recomputed, so its ft would stay null
+                # either way: training the pair then would cost two runs and
+                # change nothing.
+                needed = any(
+                    not (results_root / method /
+                         f"{family}_{distance}_{seed}" / "metrics.json").exists()
+                    for method in args.methods
+                )
+                if references[seed] is None and needed and not args.skip_reference:
+                    print(f"\n=== reference (task B from scratch) | {family} "
+                          f"| {distance} | seed={seed} ===")
+                    references[seed] = run_reference_cell(
+                        env_A, env_B, device, seed, family, distance,
+                        protocol, results_root)
+                    print(f"  d_trans={references[seed]['d_trans']:.4f} | "
+                          f"task-B held-out recon from scratch="
+                          f"{references[seed]['heldout_reconstruction_B_from_scratch']:.2f}")
+
             for method in args.methods:
-                seeds = protocol["seeds"]
                 paths = [results_root / method / f"{family}_{distance}_{s}" / "metrics.json"
                          for s in seeds]
                 if all(p.exists() for p in paths):
@@ -559,13 +760,16 @@ def main(argv=None):
                 for seed, path in zip(seeds, paths):
                     if path.exists():
                         m = json.load(open(path))
-                        print(f"  seed={seed} | WMF={m['wmf']:.4f} (cached)")
+                        print(f"  seed={seed} | PF={m['pf']:.4f} "
+                              f"RD={m['rd']:.4f} (cached)")
                         continue
 
                     m = run_cell(method, env_A, env_B, device, seed, family,
-                                 distance, protocol, results_root)
-                    print(f"  seed={seed} | WMF={m['wmf']:.4f} PF={m['pf']:.4f} "
-                          f"RD={m['rd']:.4f} FT={m['ft']:.4f} | "
+                                 distance, protocol, results_root,
+                                 reference=references[seed])
+                    ft = "  n/a" if m["ft"] is None else f"{m['ft']:.4f}"
+                    print(f"  seed={seed} | PF={m['pf']:.4f} RD={m['rd']:.4f} "
+                          f"FT={ft} (WMF={m['wmf']:.4f}) | "
                           f"task-A held-out recon={m['heldout_reconstruction_A_after_task_A']:.2f}"
                           f" -> {m['heldout_reconstruction_A_after_task_B']:.2f}")
 
@@ -576,32 +780,40 @@ def main(argv=None):
 
 
 def print_results_table(args, results_root):
-    """Mean WMF per cell, read back from the metrics.json files."""
-    print("\n" + "=" * 120)
-    print("FULL RESULTS TABLE (mean WMF across seeds)")
-    print("=" * 120)
-    header = f"{'method':<20}"
-    for family in args.families:
-        for distance in args.distances:
-            col = f"{FAMILY_ABBREV[family]}_{distance.split('_')[1]}"
-            header += f" | {col:>10}"
-    print(header)
-    print("-" * 120)
+    """
+    Mean PF and RD per cell, read back from the metrics.json files.
 
-    for method in args.methods:
-        row = f"{method:<20}"
+    Two tables rather than one WMF table: the components live on different
+    scales and RD supplies 78-97% of the aggregate (F14/P7), so a single column
+    of WMF hides which metric is doing the work. `summarize_results.py` is the
+    tool that produces the paper's tables; this is the end-of-run glance.
+    """
+    for key in ("pf", "rd"):
+        print("\n" + "=" * 120)
+        print(f"FULL RESULTS TABLE (mean {key.upper()} across seeds)")
+        print("=" * 120)
+        header = f"{'method':<20}"
         for family in args.families:
             for distance in args.distances:
-                files = list(results_root.glob(
-                    f"{method}/{family}_{distance}_*/metrics.json"))
-                if files:
-                    wmfs = [json.load(open(f))["wmf"] for f in files]
-                    row += f" | {np.mean(wmfs):>10.4f}"
-                else:
-                    row += f" | {'N/A':>10}"
-        print(row)
+                col = f"{FAMILY_ABBREV[family]}_{distance.split('_')[1]}"
+                header += f" | {col:>10}"
+        print(header)
+        print("-" * 120)
 
-    print("=" * 120)
+        for method in args.methods:
+            row = f"{method:<20}"
+            for family in args.families:
+                for distance in args.distances:
+                    files = list(results_root.glob(
+                        f"{method}/{family}_{distance}_*/metrics.json"))
+                    values = [json.load(open(f))[key] for f in files]
+                    if values:
+                        row += f" | {np.mean(values):>10.4f}"
+                    else:
+                        row += f" | {'N/A':>10}"
+            print(row)
+
+        print("=" * 120)
 
 
 if __name__ == "__main__":

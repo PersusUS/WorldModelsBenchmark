@@ -167,9 +167,35 @@ def compute_wmf(pf_list: List[float], rd_list: List[float],
     return total / k
 
 
-def compute_ft(nll_before: float, nll_random: float) -> float:
+def compute_task_A_fit_gain(nll_after_A: float, nll_random: float) -> float:
     """
-    Forward Transfer: FT = nll_random - nll_before
-    Positive = prior knowledge helped learn new task faster.
+    How much training on task A improved the fit to task A: nll_random - nll_A.
+
+    This used to be called "forward transfer" (F20). It is not: no task-B data
+    enters it, so every method sharing an architecture gets the same number by
+    construction — measured, the delta between fine-tuning and replay was
+    exactly 0.000 on 10/10 seeds.
+
+    The quantity is still worth keeping. It answers F17's question — was there
+    anything to forget? — against a random-init reference on the very dataset
+    PF is computed over. Forward transfer is `compute_forward_transfer`.
     """
-    return nll_random - nll_before
+    return nll_random - nll_after_A
+
+
+def compute_forward_transfer(error_from_scratch: float,
+                             error_after_pretraining: float) -> float:
+    """
+    Forward transfer: how much pretraining on task A helped learn task B.
+
+    FT = error(B | trained from scratch) - error(B | pretrained on A)
+
+    Positive means the pretrained model reached a lower error on task B under
+    the same budget and the same data, i.e. knowledge of A transferred.
+
+    Both errors are held-out **pixel** reconstruction on task B, not latent
+    NLL. The two models were trained independently, so their latent spaces are
+    unrelated bases and a latent NLL would score one of them in coordinates
+    that belong to the other. Pixels are the one scale both share.
+    """
+    return error_from_scratch - error_after_pretraining

@@ -5,7 +5,8 @@ import pytest
 import torch
 
 from src.benchmark.metrics import (
-    compute_ft,
+    compute_task_A_fit_gain,
+    compute_forward_transfer,
     compute_nll,
     compute_pf,
     compute_rd,
@@ -197,12 +198,40 @@ def test_rd_respects_n_samples_cap(model, latent_dataset):
     assert torch.isfinite(torch.tensor(rd))
 
 
-# --- FT --------------------------------------------------------------------
+# --- task-A fit gain (what used to be called FT) ---------------------------
 
-def test_ft_positive_when_prior_knowledge_helps():
-    """FT = nll_random - nll_before; positive means the pretrained model is better."""
-    assert compute_ft(nll_before=1.0, nll_random=5.0) == pytest.approx(4.0)
+def test_task_A_fit_gain_positive_when_training_on_A_helped():
+    """nll_random - nll_after_A; positive means task A was learned."""
+    assert compute_task_A_fit_gain(nll_after_A=1.0,
+                                   nll_random=5.0) == pytest.approx(4.0)
 
 
-def test_ft_negative_when_prior_knowledge_hurts():
-    assert compute_ft(nll_before=5.0, nll_random=1.0) == pytest.approx(-4.0)
+def test_task_A_fit_gain_negative_when_training_on_A_hurt():
+    assert compute_task_A_fit_gain(nll_after_A=5.0,
+                                   nll_random=1.0) == pytest.approx(-4.0)
+
+
+# --- forward transfer ------------------------------------------------------
+
+def test_forward_transfer_positive_when_pretraining_helps():
+    """Lower error after pretraining than from scratch means A transferred."""
+    assert compute_forward_transfer(error_from_scratch=10.0,
+                                    error_after_pretraining=4.0)         == pytest.approx(6.0)
+
+
+def test_forward_transfer_negative_when_pretraining_hurts():
+    assert compute_forward_transfer(error_from_scratch=4.0,
+                                    error_after_pretraining=10.0)         == pytest.approx(-6.0)
+
+
+def test_forward_transfer_needs_task_B_data_to_differ_between_methods():
+    """F20: the old FT saw no task-B data, so every method scored the same.
+
+    The from-scratch arm is shared, so any difference between two methods can
+    only come from their own task-B error - which is what makes this one
+    method-sensitive and the old one method-blind.
+    """
+    from_scratch = 10.0
+    method_a = compute_forward_transfer(from_scratch, 4.0)
+    method_b = compute_forward_transfer(from_scratch, 7.0)
+    assert method_a != method_b

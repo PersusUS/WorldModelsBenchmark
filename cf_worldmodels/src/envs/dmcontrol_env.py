@@ -2,11 +2,13 @@
 DMControl environment wrapper.
 Reference: https://dm-control.readthedocs.io/en/latest/suite.html
 """
-from typing import Tuple
+from typing import Tuple, Optional, Dict
 import numpy as np
 from dm_control import suite
 
 from src.envs.base_env import BaseEnv
+
+PHYSICS_KEYS = ("gravity", "mass_scale", "friction_scale")
 
 
 def _resize_obs(obs: np.ndarray) -> np.ndarray:
@@ -23,7 +25,8 @@ class DMControlEnv(BaseEnv):
     Supported: ('cheetah','run'), ('walker','run'), ('reacher','easy')
     """
 
-    def __init__(self, domain_name: str, task_name: str):
+    def __init__(self, domain_name: str, task_name: str,
+                 physics_params: Optional[Dict] = None):
         self._domain = domain_name
         self._task = task_name
         self._env = suite.load(domain_name=domain_name, task_name=task_name)
@@ -31,6 +34,39 @@ class DMControlEnv(BaseEnv):
         # Own RNG for action sampling, so runs do not depend on whatever else
         # in the process has touched the global numpy RNG.
         self._rng = np.random.default_rng()
+
+        self._physics_params = dict(physics_params or {})
+        unknown = set(self._physics_params) - set(PHYSICS_KEYS)
+        if unknown:
+            # The `lateral_wind: true` that used to sit in the dmcontrol config
+            # was read by nobody, so distance_min compared cheetah/run against
+            # itself for the whole benchmark (F8). Unknown keys are now an
+            # error: a perturbation that silently does nothing is worse than
+            # one that never shipped.
+            raise ValueError(
+                f"unknown physics parameter(s): {', '.join(sorted(unknown))}. "
+                f"Supported: {', '.join(PHYSICS_KEYS)}"
+            )
+        self._apply_physics()
+
+    def _apply_physics(self):
+        """
+        Perturb the MuJoCo model in place, same knobs as the Gymnasium family.
+
+        dm_control exposes the same MjModel, so these are the identical
+        perturbations `GymnasiumEnv` applies, which is what makes d_param
+        comparable across the two families. Note that MuJoCo's `opt.wind` is
+        deliberately not offered: it only produces a force when `opt.density`
+        or `opt.viscosity` is non-zero, and both default to zero here, so a
+        wind setting alone would be another perturbation that does nothing.
+        """
+        model = self._env.physics.model
+        if "gravity" in self._physics_params:
+            model.opt.gravity[2] = -abs(self._physics_params["gravity"])
+        if "mass_scale" in self._physics_params:
+            model.body_mass[:] *= self._physics_params["mass_scale"]
+        if "friction_scale" in self._physics_params:
+            model.geom_friction[:] *= self._physics_params["friction_scale"]
 
     def reset(self) -> np.ndarray:
         """Reset environment. Returns obs: (64, 64, 3) float32 in [0,1]"""

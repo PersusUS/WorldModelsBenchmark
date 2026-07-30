@@ -1,16 +1,23 @@
 benchmark:
   family: "dmcontrol"
   sequences:
+    # Same task, perturbed physics — the mildest change the benchmark defines.
+    # This pair used to be cheetah/run against itself with a `lateral_wind: true`
+    # that no code read (F8), so the level measured forgetting between a task
+    # and itself. The perturbation now matches the Gymnasium family's own
+    # distance_min (gravity 9.81 -> 7.0) so the two families' minimum levels are
+    # the same physical change and d_param is defined for both.
     distance_min:
       task_A:
         domain_name: "cheetah"
         task_name: "run"
-        params: {}
+        params:
+          gravity: 9.81
       task_B:
         domain_name: "cheetah"
         task_name: "run"
         params:
-          lateral_wind: true
+          gravity: 7.0
     distance_med:
       task_A:
         domain_name: "cheetah"
@@ -36,7 +43,8 @@ benchmark:
 # paper must be generated from the results, never written by hand.
 protocol:
   n_collect: 20            # episodes collected per task, random policy
-  n_train: 1000            # gradient updates per task
+  n_train: 5000            # gradient updates per task; 5x the smoke budget,
+                           # the knee of the task-A convergence curve (R11)
   batch_size: 8
   seq_len: 5
   learning_rate: 1.0e-3

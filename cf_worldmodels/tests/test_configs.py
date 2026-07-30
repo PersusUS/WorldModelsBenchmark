@@ -64,6 +64,30 @@ def test_dmcontrol_tasks_use_domain_and_task_names():
             assert "task_name" in task
 
 
+def test_no_distance_level_compares_a_task_with_itself():
+    """F8: dmcontrol's distance_min was cheetah/run against cheetah/run, with a
+    `lateral_wind: true` that no code read. A level whose two tasks are
+    identical measures forgetting between a task and itself."""
+    for path in BENCHMARK_CONFIGS:
+        cfg = OmegaConf.load(path)
+        for level in DISTANCE_LEVELS:
+            seq = cfg.benchmark.sequences[level]
+            a = OmegaConf.to_container(seq.task_A, resolve=True)
+            b = OmegaConf.to_container(seq.task_B, resolve=True)
+            assert a != b, f"{path}:{level} pairs a task with itself"
+
+
+def test_dmcontrol_physics_params_are_ones_the_wrapper_applies():
+    """A perturbation the environment silently ignores is how F8 happened."""
+    from src.envs.dmcontrol_env import PHYSICS_KEYS
+
+    cfg = OmegaConf.load("configs/benchmark/dmcontrol.yaml")
+    for level in DISTANCE_LEVELS:
+        seq = cfg.benchmark.sequences[level]
+        for task in [seq.task_A, seq.task_B]:
+            assert set(task.get("params", {})) <= set(PHYSICS_KEYS)
+
+
 def test_gymnasium_physics_params_are_complete():
     """compute_d_param reads all three keys off every Gymnasium task."""
     cfg = OmegaConf.load("configs/benchmark/gymnasium.yaml")

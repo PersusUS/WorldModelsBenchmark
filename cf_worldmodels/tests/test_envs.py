@@ -201,6 +201,35 @@ def test_dmcontrol_sampled_actions_are_within_spec(dmc_env):
     assert np.all(action <= spec.maximum)
 
 
+def test_dmcontrol_applies_physics_perturbations():
+    """F8: the physics block used to be dropped on the floor for this family."""
+    from src.envs.dmcontrol_env import DMControlEnv
+
+    env = DMControlEnv("cheetah", "run",
+                       physics_params={"gravity": 4.0, "mass_scale": 2.0})
+    try:
+        model = env._env.physics.model
+        assert model.opt.gravity[2] == pytest.approx(-4.0)
+        baseline = DMControlEnv("cheetah", "run")
+        try:
+            assert np.allclose(model.body_mass,
+                               2.0 * baseline._env.physics.model.body_mass)
+        finally:
+            baseline.close()
+    finally:
+        env.close()
+
+
+def test_dmcontrol_rejects_a_perturbation_it_cannot_apply():
+    """`lateral_wind: true` sat in the config for the whole project doing
+    nothing. MuJoCo's opt.wind needs a non-zero fluid density to have any
+    effect, so the wrapper refuses keys it does not implement."""
+    from src.envs.dmcontrol_env import DMControlEnv
+
+    with pytest.raises(ValueError, match="lateral_wind"):
+        DMControlEnv("cheetah", "run", physics_params={"lateral_wind": True})
+
+
 def test_dmcontrol_first_reward_is_a_float_not_none(dmc_env):
     """timestep.reward is None on the first step; the wrapper must map it to 0."""
     dmc_env.reset()

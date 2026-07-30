@@ -33,7 +33,7 @@ cf_worldmodels/
 │   ├── benchmark/          # PF / RD / WMF / FT metrics, d_param / d_trans distances
 │   └── utils/              # Replay buffer, checkpointing, logging
 ├── experiments/            # Benchmark runners and plotting scripts
-├── tests/                  # Test suite (221 tests)
+├── tests/                  # Test suite (234 tests)
 └── results/                # One directory per run (metrics.json + checkpoint)
 ```
 
@@ -78,6 +78,26 @@ Run a single method/family/distance combination:
 python experiments/run_benchmark.py --method ug_mtm --config configs/benchmark/minigrid.yaml --distance distance_min --seeds 0 1 2 3 4 --no_wandb
 ```
 
+### Determinism
+
+Re-running a cell with the same seed reproduces its metrics bit-for-bit. Getting
+there needs more than seeding `torch` and `numpy`, because two independent
+sources of nondeterminism sit outside them:
+
+- **The environments own RNGs no global seed reaches.** Gymnasium environments
+  and action spaces each carry their own generator, seeded from OS entropy, and
+  dm_control randomizes the initial state through the task's own `random`
+  argument. Left unseeded, two runs of the same seed collected different rollouts
+  and therefore trained on different data. `BaseEnv.seed()` seeds both the
+  episode RNG and the action sampler; every runner calls it.
+- **cuDNN picks kernels by heuristic** and its GRU backward is nondeterministic
+  by default. `src/utils/seeding.py::set_seed()` sets
+  `cudnn.deterministic = True` and `cudnn.benchmark = False`, which costs some
+  throughput and was verified sufficient to make training bit-identical here.
+
+Both are covered by `tests/test_seeding.py`, including an end-to-end check that
+training twice from the same seed yields identical weights.
+
 ## Results
 
 > **Not yet published.** An earlier run of this benchmark was invalidated by a
@@ -120,9 +140,10 @@ distance between physics parameter vectors, Gymnasium family only) and
 python -m pytest
 ```
 
-221 tests covering the models, baselines, metrics, distances, buffer,
-checkpoint format, and config consistency. The 20 tests marked `integration`
-build real MiniGrid / MuJoCo / dm_control environments; skip them with:
+234 tests covering the models, baselines, metrics, distances, buffer,
+checkpoint format, seeding and config consistency. The 25 tests marked
+`integration` build real MiniGrid / MuJoCo / dm_control environments; skip them
+with:
 
 ```bash
 python -m pytest -m "not integration"

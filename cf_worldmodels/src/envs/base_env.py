@@ -22,6 +22,21 @@ class BaseEnv(ABC):
     def sample_action(self) -> np.ndarray:
         """Sample random action from action space."""
 
+    @abstractmethod
+    def seed(self, seed: int) -> None:
+        """
+        Seed this environment's own RNGs: both the one driving `reset` and the
+        one driving `sample_action`.
+
+        Required for reproducibility. A global `np.random.seed` does not reach
+        either of them, so without this two runs with the same seed collect
+        different rollouts and therefore train on different data (F16).
+
+        Seeding is a one-shot operation: call it once at the start of a run, not
+        per episode, so that successive `reset()` calls walk a deterministic
+        stream of distinct initial states rather than repeating one.
+        """
+
     @property
     @abstractmethod
     def obs_shape(self) -> Tuple[int, int, int]:

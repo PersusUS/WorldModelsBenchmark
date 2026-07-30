@@ -26,6 +26,7 @@ from src.benchmark.protocol import build_latent_eval_dataset, collect_rollouts
 from src.benchmark.metrics import compute_pf, compute_rd, compute_wmf, compute_ft, compute_nll
 from src.benchmark.distances import compute_d_param
 from src.utils.logging_utils import save_metrics
+from src.utils.seeding import set_seed
 
 STEPS = 1000
 SEQ_LEN = 5
@@ -90,8 +91,15 @@ def train_task(model, buffer, optimizer, device, steps):
 
 
 def run_baseline(method, env_A, env_B, device, seed, family, distance):
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+    # Seeding the global RNGs is not enough: the environments own RNGs that no
+    # global seed reaches, and cuDNN needs to be put in deterministic mode.
+    # See src/utils/seeding.py. The two environments are seeded once here, not
+    # per episode, so successive resets walk a deterministic stream of distinct
+    # initial states — that is also what keeps the held-out task-A episodes
+    # different from the ones used for training.
+    set_seed(seed)
+    env_A.seed(seed)
+    env_B.seed(seed + 1)
 
     action_dim = env_A.action_dim
     model = create_baseline_model(method, action_dim).to(device)
@@ -163,8 +171,11 @@ def run_baseline(method, env_A, env_B, device, seed, family, distance):
 
 
 def run_ug_mtm(env_A, env_B, device, seed, family, distance):
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+    # See the note in run_baseline: global seeds alone do not make this run
+    # reproducible.
+    set_seed(seed)
+    env_A.seed(seed)
+    env_B.seed(seed + 1)
 
     action_dim = env_A.action_dim
     ug_cfg = OmegaConf.load("configs/models/ug_mtm.yaml")

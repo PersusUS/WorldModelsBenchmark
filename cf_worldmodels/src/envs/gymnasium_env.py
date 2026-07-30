@@ -61,6 +61,13 @@ class GymnasiumEnv(BaseEnv):
         """Sample random action from continuous action space."""
         return self._env.action_space.sample().astype(np.float32)
 
+    def seed(self, seed: int) -> None:
+        """Seed the env RNG and the action-space sampler; see BaseEnv.seed."""
+        # Passing the seed to reset() is Gymnasium's own way of seeding the
+        # episode RNG. Later seedless reset() calls continue that stream.
+        self._env.reset(seed=seed)
+        self._env.action_space.seed(seed)
+
     @property
     def obs_shape(self) -> Tuple[int, int, int]:
         return (64, 64, 3)

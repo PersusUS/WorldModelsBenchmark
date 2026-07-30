@@ -28,6 +28,9 @@ class DMControlEnv(BaseEnv):
         self._task = task_name
         self._env = suite.load(domain_name=domain_name, task_name=task_name)
         self._action_spec = self._env.action_spec()
+        # Own RNG for action sampling, so runs do not depend on whatever else
+        # in the process has touched the global numpy RNG.
+        self._rng = np.random.default_rng()
 
     def reset(self) -> np.ndarray:
         """Reset environment. Returns obs: (64, 64, 3) float32 in [0,1]"""
@@ -50,9 +53,18 @@ class DMControlEnv(BaseEnv):
     def sample_action(self) -> np.ndarray:
         """Sample random action from continuous action space."""
         spec = self._action_spec
-        return np.random.uniform(
+        return self._rng.uniform(
             low=spec.minimum, high=spec.maximum, size=spec.shape
         ).astype(np.float32)
+
+    def seed(self, seed: int) -> None:
+        """Seed the task RNG and the action sampler; see BaseEnv.seed."""
+        # dm_control randomizes the initial state through the task's own
+        # RandomState, which `suite.load` seeds from OS entropy unless given
+        # `task_kwargs={'random': ...}`. Reseeding it in place avoids rebuilding
+        # the environment and its render context.
+        self._env.task.random.seed(seed)
+        self._rng = np.random.default_rng(seed)
 
     @property
     def obs_shape(self) -> Tuple[int, int, int]:

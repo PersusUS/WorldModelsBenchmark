@@ -47,6 +47,13 @@ class MiniGridEnv(BaseEnv):
         one_hot[action] = 1.0
         return one_hot
 
+    def seed(self, seed: int) -> None:
+        """Seed the env RNG and the action-space sampler; see BaseEnv.seed."""
+        # Passing the seed to reset() is Gymnasium's own way of seeding the
+        # episode RNG. Later seedless reset() calls continue that stream.
+        self._env.reset(seed=seed)
+        self._env.action_space.seed(seed)
+
     @property
     def obs_shape(self) -> Tuple[int, int, int]:
         return (64, 64, 3)

@@ -31,6 +31,7 @@ from src.benchmark.protocol import build_latent_eval_dataset, collect_rollouts
 from src.benchmark.metrics import compute_pf, compute_rd, compute_wmf, compute_ft, compute_nll
 from src.utils.checkpointing import save_checkpoint
 from src.utils.logging_utils import save_metrics
+from src.utils.seeding import set_seed
 
 
 def make_env(env_cfg, family):
@@ -109,14 +110,16 @@ def main():
     family = cfg.benchmark.family
     seq_cfg = cfg.benchmark.sequences[args.distance]
 
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Method: {args.method} | Family: {family} | Distance: {args.distance} | Seed: {args.seed}")
 
     # Create environments
     env_A = make_env(seq_cfg.task_A, family)
     env_B = make_env(seq_cfg.task_B, family)
+    # Environments own RNGs that no global seed reaches — see src/utils/seeding.py
+    env_A.seed(args.seed)
+    env_B.seed(args.seed + 1)
     action_dim = env_A.action_dim
 
     # Create model

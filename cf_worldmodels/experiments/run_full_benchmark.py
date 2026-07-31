@@ -16,9 +16,14 @@ is printed before anything trains.
 
 Runs whose metrics.json already exists are skipped, so it is safe to interrupt
 and resume.
+
+Each family runs in a subprocess of its own. That is not tidiness: dm_control
+cannot create an OpenGL context in a process where Gymnasium's MuJoCo already
+has one, and the run dies at the boundary (F24).
 """
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -650,8 +655,66 @@ def protocol_overrides(args):
     }
 
 
+def family_subprocess_argv(args, family):
+    """The command line that runs exactly one family of `args`.
+
+    Every flag has to be forwarded. A flag built here and then dropped is how
+    F9 happened: `run_ablations.py` assembled its overrides, printed them, and
+    never passed them on, so five ablations silently ran the unmodified config.
+    """
+    argv = [sys.executable, str(Path(__file__).resolve()),
+            "--families", family,
+            "--methods", *args.methods,
+            "--distances", *args.distances,
+            "--results-dir", str(args.results_dir)]
+    if args.skip_reference:
+        argv.append("--skip-reference")
+    for flag, value in (("--steps", args.n_train),
+                        ("--batch-size", args.batch_size),
+                        ("--seq-len", args.seq_len),
+                        ("--n-collect", args.n_collect)):
+        if value is not None:
+            argv += [flag, str(value)]
+    if args.seeds is not None:
+        argv += ["--seeds", *[str(s) for s in args.seeds]]
+    return argv
+
+
+def run_families_in_subprocesses(args):
+    """
+    Run each family in a process of its own, then print the combined table.
+
+    Not an optimisation — a requirement. MuJoCo and dm_control both want an
+    OpenGL context, and dm_control cannot build one in a process where
+    Gymnasium's MuJoCo already has: the second family to ask dies with
+    `mujoco.FatalError: Default framebuffer is not complete`. It killed the
+    first full run 30 hours in, at the gymnasium -> dmcontrol boundary (F24).
+    Closing the environments does not release the context; only process exit
+    does.
+
+    A fresh interpreter per family also means that a crash in one family costs
+    that family rather than the run, and the cells already on disk are skipped
+    on the next attempt anyway.
+    """
+    for family in args.families:
+        print(f"\n{'#' * 78}\n# {family} (subprocess)\n{'#' * 78}", flush=True)
+        result = subprocess.run(family_subprocess_argv(args, family))
+        if result.returncode != 0:
+            raise SystemExit(
+                f"the {family} subprocess exited with {result.returncode}. "
+                f"The families that finished are on disk and will be skipped "
+                f"when you rerun."
+            )
+    print_results_table(args, args.results_dir)
+
+
 def main(argv=None):
     args = parse_args(argv)
+    # One family per process; see run_families_in_subprocesses. --dry-run is
+    # pure printing, so it stays in this one.
+    if len(args.families) > 1 and not args.dry_run:
+        return run_families_in_subprocesses(args)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 

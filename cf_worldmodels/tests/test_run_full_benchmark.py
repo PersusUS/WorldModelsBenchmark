@@ -20,6 +20,7 @@ from experiments.run_full_benchmark import (
     check_protocol_consistency,
     collect_cell_buffers,
     create_model,
+    family_subprocess_argv,
     load_reference,
     parse_args,
     protocol_overrides,
@@ -348,6 +349,76 @@ def test_reference_is_shared_by_every_method(tmp_path, cfg):
              for _ in runner.METHODS}
     assert len(paths) == 1
     assert "_reference" in str(paths.pop())
+
+
+# --- one process per family (F24) ------------------------------------------
+
+def test_each_family_gets_its_own_process(monkeypatch, tmp_path):
+    """dm_control cannot build an OpenGL context in a process where MuJoCo
+    already has one, so a single process cannot run the whole grid."""
+    calls = []
+
+    class Result:
+        returncode = 0
+
+    monkeypatch.setattr(runner.subprocess, "run",
+                        lambda argv, **kw: calls.append(argv) or Result())
+    monkeypatch.setattr(runner, "print_results_table", lambda *a: None)
+    runner.main(["--results-dir", str(tmp_path)])
+
+    assert [argv[argv.index("--families") + 1] for argv in calls] ==         list(FAMILY_CONFIGS)
+
+
+def test_a_failing_family_stops_the_run(monkeypatch, tmp_path):
+    class Result:
+        returncode = 1
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda argv, **kw: Result())
+    with pytest.raises(SystemExit, match="subprocess exited"):
+        runner.main(["--results-dir", str(tmp_path)])
+
+
+def test_one_family_runs_in_this_process(monkeypatch, tmp_path):
+    """No subprocess when there is nothing to isolate -- and the child call,
+    which asks for exactly one family, must not recurse forever."""
+    monkeypatch.setattr(runner.subprocess, "run",
+                        lambda *a, **kw: pytest.fail("should not spawn"))
+    runner.main(["--families", "minigrid", "--dry-run",
+                 "--results-dir", str(tmp_path)])
+
+
+def test_dry_run_stays_in_one_process(monkeypatch, tmp_path):
+    """--dry-run only prints; spawning three interpreters to print would make
+    the plan harder to read, not easier."""
+    monkeypatch.setattr(runner.subprocess, "run",
+                        lambda *a, **kw: pytest.fail("should not spawn"))
+    runner.main(["--dry-run", "--results-dir", str(tmp_path)])
+
+
+def test_every_flag_reaches_the_subprocess():
+    """F9 was overrides that were built, printed, and never passed on. The
+    generated command line is parsed back and compared field by field."""
+    argv = ["--methods", "ewc", "ug_mtm", "--distances", "distance_max",
+            "--results-dir", "somewhere", "--skip-reference",
+            "--steps", "7", "--batch-size", "3", "--seq-len", "2",
+            "--n-collect", "4", "--seeds", "11", "12"]
+    parent = parse_args(argv)
+    child = parse_args(family_subprocess_argv(parent, "dmcontrol")[2:])
+
+    assert child.families == ["dmcontrol"]
+    assert child.methods == parent.methods
+    assert child.distances == parent.distances
+    assert str(child.results_dir) == str(parent.results_dir)
+    assert child.skip_reference == parent.skip_reference
+    assert protocol_overrides(child) == protocol_overrides(parent)
+
+
+def test_defaults_survive_the_round_trip():
+    """A None override must stay None, not become an explicit value."""
+    parent = parse_args([])
+    child = parse_args(family_subprocess_argv(parent, "minigrid")[2:])
+    assert protocol_overrides(child) == protocol_overrides(parent)
+    assert all(v is None for v in protocol_overrides(child).values())
 
 
 # --- command line ----------------------------------------------------------

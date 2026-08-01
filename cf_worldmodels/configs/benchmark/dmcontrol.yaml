@@ -27,18 +27,29 @@ benchmark:
         domain_name: "walker"
         task_name: "run"
         params: {}
-    # Was cheetah/run -> reacher/easy, which cannot be run at all: reacher has
-    # 2 actuators and cheetah 6, and one world model spans both tasks, so its
-    # GRU has a single action width (F25). Padding reacher's actions out to 6
-    # was the alternative and was rejected: four action dimensions would sit at
-    # zero for the whole of task B, and RD then rolls out task-A actions that
-    # use them, so part of the measured forgetting would be the model's
-    # response to dead inputs rather than a difference in dynamics.
+    # This level has been wrong twice, and the second attempt is the
+    # instructive one.
     #
-    # walker/stand shares cheetah's 6 actuators and changes both the body and
-    # the objective, where distance_med changes only the body. Whether that is
-    # really the larger change is not asserted: d_trans measures it, and
-    # distance_med came out at 6.99 +- 3.00.
+    # It shipped as cheetah/run -> reacher/easy, which cannot run at all:
+    # reacher has 2 actuators against cheetah's 6 and one world model spans
+    # both tasks, so its GRU has a single action width (F25).
+    #
+    # It was then set to walker/stand, on the reasoning that it changes body
+    # and objective where distance_med changes only the body. That produced a
+    # bit-identical copy of distance_med (F26): in dm_control the tasks of a
+    # domain share physics and initial-state distribution and differ **only in
+    # the reward function**, and this benchmark trains a reward-free model on
+    # random-policy rollouts. The reward never enters, so walker/run and
+    # walker/stand are the same environment as far as anything measured here is
+    # concerned.
+    #
+    # So a dm_control level can only differ by domain or by physics. Only
+    # cheetah and walker have 6 actuators, and the domain change is already
+    # spent on distance_med, which leaves physics: this is distance_med's body
+    # change plus the perturbation that Gymnasium's own distance_max applies
+    # (gravity 4.0, mass x3, friction x0.5). Strictly more change than
+    # distance_med, by construction rather than by argument -- and d_trans
+    # checks it: distance_med measures 6.99 +- 3.00.
     distance_max:
       task_A:
         domain_name: "cheetah"
@@ -46,8 +57,11 @@ benchmark:
         params: {}
       task_B:
         domain_name: "walker"
-        task_name: "stand"
-        params: {}
+        task_name: "run"
+        params:
+          gravity: 4.0
+          mass_scale: 3.0
+          friction_scale: 0.5
 
 # Training protocol. These values are what `experiments/run_full_benchmark.py`
 # actually executes: it reads every one of them from here and hardcodes none.

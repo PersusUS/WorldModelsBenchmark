@@ -367,7 +367,7 @@ def reference_path(results_root, family, distance, seed):
 
 
 def run_reference_cell(buffers, action_dim, device, seed, family, distance,
-                       protocol, results_root):
+                       tasks, protocol, results_root):
     """
     Train the two from-scratch models the cells of this (family, distance,
     seed) need, and store what they are needed for.
@@ -432,13 +432,14 @@ def run_reference_cell(buffers, action_dim, device, seed, family, distance,
         "family": family,
         "distance": distance,
         "seed": seed,
+        "tasks": tasks,
         "protocol": protocol,
     }
     save_metrics(reference, reference_path(results_root, family, distance, seed))
     return reference
 
 
-def load_reference(results_root, family, distance, seed, protocol):
+def load_reference(results_root, family, distance, seed, protocol, tasks=None):
     """
     The stored reference for this cell, or None if it was never computed.
 
@@ -455,11 +456,16 @@ def load_reference(results_root, family, distance, seed, protocol):
             f"{path} was produced under a different protocol than the one "
             "requested. Archive or delete it before running."
         )
+    if tasks is not None and stored.get("tasks") != tasks:
+        raise SystemExit(
+            f"{path} was produced from a different task pair than the one "
+            "requested. Archive or delete it before running."
+        )
     return stored
 
 
 def run_cell(method, buffers, action_dim, device, seed, family, distance,
-             protocol, results_root, reference=None):
+             tasks, protocol, results_root, reference=None):
     """Train one (method, family, distance, seed) cell and write its metrics."""
     # Seeding the global RNGs is not enough: the environments own RNGs that no
     # global seed reaches, and cuDNN needs to be put in deterministic mode. See
@@ -615,6 +621,10 @@ def run_cell(method, buffers, action_dim, device, seed, family, distance,
         "family": family,
         "distance": distance,
         "seed": seed,
+        # Which two tasks this cell actually ran. The protocol block says at
+        # what budget; without this, a config change to a task pair leaves
+        # stale cells that look current (F26).
+        "tasks": tasks,
         "protocol": protocol,
     }
     results_dir = results_root / method / f"{family}_{distance}_{seed}"
@@ -628,29 +638,50 @@ def run_cell(method, buffers, action_dim, device, seed, family, distance,
     return metrics
 
 
-def check_protocol_consistency(paths, protocol):
+def task_spec(seq_cfg):
+    """The two tasks of a distance level, as plain JSON."""
+    return {
+        "task_A": OmegaConf.to_container(seq_cfg.task_A, resolve=True),
+        "task_B": OmegaConf.to_container(seq_cfg.task_B, resolve=True),
+    }
+
+
+def check_protocol_consistency(paths, protocol, tasks_by_distance=None):
     """
-    Refuse to reuse results produced under a different protocol.
+    Refuse to reuse results whose protocol or task pair differs from the one
+    being asked for.
 
     Skipping on the mere existence of metrics.json is what makes the runner
     resumable, but it would also silently average two training budgets into one
-    table cell. Mismatches are reported all at once so the fix is a single
-    move-or-delete.
+    table cell. The task pair is checked for the same reason and learned the
+    hard way: `metrics.json` recorded the protocol but not *which tasks ran*,
+    so changing a broken pair in the config left 25 stale cells that the runner
+    would have happily reused under the new pair's name (F26).
+
+    Mismatches are reported all at once so the fix is a single move-or-delete.
     """
     mismatched = []
     for path in paths:
-        stored = json.load(open(path)).get("protocol")
-        if stored != protocol:
-            mismatched.append(path)
+        stored = json.load(open(path))
+        if stored.get("protocol") != protocol:
+            mismatched.append((path, "protocol"))
+            continue
+        if tasks_by_distance is not None:
+            # results/<method>/<family>_<distance>_<seed>/metrics.json
+            distance = stored.get("distance")
+            expected = tasks_by_distance.get(distance)
+            if expected is not None and stored.get("tasks") != expected:
+                mismatched.append((path, "task pair"))
+
     if mismatched:
-        listing = "\n".join(f"  {p}" for p in mismatched[:10])
+        listing = "\n".join(f"  {p}  ({why})" for p, why in mismatched[:10])
         more = "" if len(mismatched) <= 10 else \
             f"\n  ... and {len(mismatched) - 10} more"
         raise SystemExit(
-            f"{len(mismatched)} cached result(s) were produced under a "
-            f"different protocol than the one requested:\n{listing}{more}\n\n"
-            "Archive or delete them before running with a new protocol — "
-            "averaging two budgets into one table cell is exactly the kind of "
+            f"{len(mismatched)} cached result(s) do not match what was "
+            f"requested:\n{listing}{more}\n\n"
+            "Archive or delete them before rerunning — averaging two budgets, "
+            "or two task pairs, into one table cell is exactly the kind of "
             "silent mixing this check exists to prevent."
         )
 
@@ -796,7 +827,13 @@ def main(argv=None):
     existing = [p for p in cached if p.exists()]
     for family in args.families:
         family_cached = [p for p in existing if f"{family}_" in p.parent.name]
-        check_protocol_consistency(family_cached, protocols[family])
+        cfg = OmegaConf.load(FAMILY_CONFIGS[family])
+        tasks_by_distance = {
+            distance: task_spec(cfg.benchmark.sequences[distance])
+            for distance in args.distances
+        }
+        check_protocol_consistency(family_cached, protocols[family],
+                                   tasks_by_distance)
 
     print(f"\n{len(planned)} cell(s) planned, {len(existing)} already cached.")
     if args.skip_reference:
@@ -822,6 +859,7 @@ def main(argv=None):
 
         for distance in args.distances:
             seq_cfg = cfg.benchmark.sequences[distance]
+            tasks = task_spec(seq_cfg)
             env_A, env_B = create_env_pair(family, seq_cfg)
 
             # The loop is nested by seed rather than by method so that the four
@@ -836,7 +874,7 @@ def main(argv=None):
                             "metrics.json").exists()
                 ]
                 reference = load_reference(results_root, family, distance,
-                                           seed, protocol)
+                                           seed, protocol, tasks)
                 # Only train a missing reference if some cell still needs it: a
                 # cached cell is never recomputed, so its ft would stay null
                 # either way and the pair would cost two runs for nothing.
@@ -854,14 +892,14 @@ def main(argv=None):
                 if need_reference:
                     reference = run_reference_cell(
                         buffers, env_A.action_dim, device, seed, family,
-                        distance, protocol, results_root)
+                        distance, tasks, protocol, results_root)
                     print(f"  reference   | d_trans={reference['d_trans']:.4f} "
                           f"| task-B held-out recon from scratch="
                           f"{reference['heldout_reconstruction_B_from_scratch']:.2f}")
 
                 for method in pending:
                     m = run_cell(method, buffers, env_A.action_dim, device,
-                                 seed, family, distance, protocol,
+                                 seed, family, distance, tasks, protocol,
                                  results_root, reference=reference)
                     ft = "  n/a" if m["ft"] is None else f"{m['ft']:.4f}"
                     print(f"  {method:<16} | PF={m['pf']:.4f} "

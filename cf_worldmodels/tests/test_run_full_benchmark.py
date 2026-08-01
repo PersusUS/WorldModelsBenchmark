@@ -208,8 +208,35 @@ def test_mismatched_cached_protocol_stops_the_run(tmp_path, cfg):
     stale = dict(protocol, n_train=protocol["n_train"] * 2)
     path = _write(tmp_path / "finetuning" / "minigrid_distance_min_0" /
                   "metrics.json", stale)
-    with pytest.raises(SystemExit, match="different protocol"):
+    with pytest.raises(SystemExit, match="protocol"):
         check_protocol_consistency([path], protocol)
+
+
+def test_a_cached_cell_from_another_task_pair_stops_the_run(tmp_path, cfg):
+    """F26: metrics.json recorded the budget but not which tasks ran, so
+    fixing a broken pair in the config left stale cells that the runner would
+    have reused under the new pair's name."""
+    protocol = resolve_protocol(cfg)
+    path = tmp_path / "finetuning" / "minigrid_distance_max_0" / "metrics.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "protocol": protocol, "distance": "distance_max",
+        "tasks": {"task_A": {"env_id": "old-A"}, "task_B": {"env_id": "old-B"}},
+    }))
+    expected = {"distance_max": {"task_A": {"env_id": "old-A"},
+                                 "task_B": {"env_id": "NEW-B"}}}
+    with pytest.raises(SystemExit, match="task pair"):
+        check_protocol_consistency([path], protocol, expected)
+
+
+def test_a_cached_cell_from_the_same_task_pair_passes(tmp_path, cfg):
+    protocol = resolve_protocol(cfg)
+    tasks = {"task_A": {"env_id": "A"}, "task_B": {"env_id": "B"}}
+    path = tmp_path / "finetuning" / "minigrid_distance_max_0" / "metrics.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"protocol": protocol,
+                                "distance": "distance_max", "tasks": tasks}))
+    check_protocol_consistency([path], protocol, {"distance_max": tasks})
 
 
 def test_results_without_a_recorded_protocol_stop_the_run(tmp_path, cfg):

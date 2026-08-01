@@ -266,3 +266,53 @@ def test_collect_rollouts_marks_the_final_transition_done(minigrid_env):
     buffer = ReplayBuffer(max_episodes=2, seq_len=1)
     collect_rollouts(minigrid_env, buffer, n_rollouts=1, max_steps=5)
     assert buffer.episodes[0][-1]["done"] is True
+
+
+# --- the two tasks of a pair must actually differ (F26) ---------------------
+
+@pytest.mark.integration
+@pytest.mark.parametrize("family", ["minigrid", "gymnasium", "dmcontrol"])
+def test_each_distance_pair_produces_different_data(family):
+    """Comparing the config dicts is not enough, and F26 is why.
+
+    dmcontrol's distance_max was set to walker/stand against distance_med's
+    walker/run. Different task names, different dicts -- and bit-identical
+    data, because dm_control's tasks share a domain's physics and initial-state
+    distribution and differ only in the reward function, which a reward-free
+    world model trained on random rollouts never sees.
+
+    So the check has to be on the observations: same seed, same actions, and
+    the two tasks must still diverge.
+    """
+    from omegaconf import OmegaConf
+
+    from experiments.run_full_benchmark import FAMILY_CONFIGS, create_env_pair
+
+    import mujoco
+
+    cfg = OmegaConf.load(FAMILY_CONFIGS[family])
+    for level in ["distance_min", "distance_med", "distance_max"]:
+        env_A, env_B = create_env_pair(family, cfg.benchmark.sequences[level])
+        try:
+            frames = []
+            for env in (env_A, env_B):
+                env.seed(0)
+                obs = env.reset()
+                action = np.zeros(env.action_dim, dtype=np.float32)
+                for _ in range(5):
+                    obs, _r, done, _i = env.step(action)
+                    if done:
+                        break
+                frames.append(obs)
+            assert not np.array_equal(frames[0], frames[1]), (
+                f"{family}/{level}: both tasks produce identical observations"
+            )
+        except mujoco.FatalError as exc:
+            # F24/I20: dm_control cannot build a render context in a process
+            # where MuJoCo already has one, which is why the runner gives each
+            # family its own process. Covered on its own with:
+            #   pytest tests/test_envs.py -k "different_data and dmcontrol"
+            pytest.skip(f"render context already taken (F24): {exc}")
+        finally:
+            env_A.close()
+            env_B.close()

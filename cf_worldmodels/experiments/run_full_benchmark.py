@@ -285,6 +285,46 @@ def switch_task(model, method, model_i, buf_A, buf_B, buf_A_heldout,
                 param.requires_grad_(False)
 
 
+def preflight_action_dims(family, cfg, distances):
+    """
+    Check every task pair of a family before training anything.
+
+    One world model spans both tasks of a pair, so its GRU is built with one
+    action width; a pair whose two tasks disagree cannot be run at all. This
+    used to surface as a torch shape error 12 hours into the family, from
+    inside the transition (`input has inconsistent input_size: got 34 expected
+    38`), because only task A was ever checked against the declared value
+    (F25).
+
+    Every pair is reported at once, so a config with two broken levels takes
+    one fix rather than two runs to find.
+    """
+    declared = int(cfg.model.action_dim)
+    problems = []
+    for distance in distances:
+        seq_cfg = cfg.benchmark.sequences[distance]
+        env_A, env_B = create_env_pair(family, seq_cfg)
+        try:
+            for task, env in (("task_A", env_A), ("task_B", env_B)):
+                if env.action_dim != declared:
+                    problems.append(
+                        f"  {distance}/{task}: exposes action_dim="
+                        f"{env.action_dim}, config declares {declared}"
+                    )
+        finally:
+            env_A.close()
+            env_B.close()
+
+    if problems:
+        raise SystemExit(
+            f"{FAMILY_CONFIGS[family]} declares action_dim={declared} but its "
+            f"tasks do not agree:\n" + "\n".join(problems) + "\n\n"
+            "A pair whose two tasks have different action widths cannot be "
+            "run by one world model. Fix the pair, or give the family an "
+            "action space both tasks fit in."
+        )
+
+
 def collect_cell_buffers(env_A, env_B, seed, protocol):
     """
     The four buffers every method of one (family, distance, seed) shares.
@@ -778,16 +818,11 @@ def main(argv=None):
         cfg = OmegaConf.load(FAMILY_CONFIGS[family])
         protocol = protocols[family]
 
+        preflight_action_dims(family, cfg, args.distances)
+
         for distance in args.distances:
             seq_cfg = cfg.benchmark.sequences[distance]
             env_A, env_B = create_env_pair(family, seq_cfg)
-
-            declared = int(cfg.model.action_dim)
-            if declared != env_A.action_dim:
-                raise SystemExit(
-                    f"{FAMILY_CONFIGS[family]} declares action_dim="
-                    f"{declared} but {family} exposes {env_A.action_dim}"
-                )
 
             # The loop is nested by seed rather than by method so that the four
             # buffers are collected once and shared by the five cells and the

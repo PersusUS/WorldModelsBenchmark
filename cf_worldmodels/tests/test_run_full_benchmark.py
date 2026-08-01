@@ -21,6 +21,7 @@ from experiments.run_full_benchmark import (
     collect_cell_buffers,
     create_model,
     family_subprocess_argv,
+    preflight_action_dims,
     load_reference,
     parse_args,
     protocol_overrides,
@@ -233,7 +234,7 @@ class StubEnv:
 
     EPISODE_LENGTH = 4
 
-    def __init__(self, action_dim=2):
+    def __init__(self, action_dim=2):  # noqa: D401 - see class docstring
         self._rng = np.random.default_rng()
         self._t = 0
         self.action_dim = action_dim
@@ -349,6 +350,44 @@ def test_reference_is_shared_by_every_method(tmp_path, cfg):
              for _ in runner.METHODS}
     assert len(paths) == 1
     assert "_reference" in str(paths.pop())
+
+
+# --- action widths, checked before training (F25) ---------------------------
+
+def test_a_pair_whose_tasks_disagree_is_rejected(monkeypatch, cfg):
+    """F25: dmcontrol's distance_max paired cheetah (6 actions) with reacher
+    (2). One world model spans both tasks, so its GRU has one action width;
+    the mismatch surfaced 12 hours in as a torch shape error."""
+    monkeypatch.setattr(runner, "create_env_pair",
+                        lambda family, seq: (StubEnv(7), StubEnv(2)))
+    with pytest.raises(SystemExit) as excinfo:
+        preflight_action_dims("minigrid", cfg, ["distance_max"])
+    assert "action_dim=2" in str(excinfo.value)
+    assert "task_B" in str(excinfo.value)
+
+
+def test_every_broken_pair_is_reported_at_once(monkeypatch, cfg):
+    """Two broken levels should cost one fix, not two runs."""
+    monkeypatch.setattr(runner, "create_env_pair",
+                        lambda family, seq: (StubEnv(7), StubEnv(2)))
+    with pytest.raises(SystemExit) as excinfo:
+        preflight_action_dims("minigrid", cfg,
+                              ["distance_min", "distance_max"])
+    assert "distance_min" in str(excinfo.value)
+    assert "distance_max" in str(excinfo.value)
+
+
+def test_matching_pairs_pass_and_close_their_environments(monkeypatch, cfg):
+    closed = []
+
+    class ClosingStub(StubEnv):
+        def close(self):
+            closed.append(self)
+
+    monkeypatch.setattr(runner, "create_env_pair",
+                        lambda family, seq: (ClosingStub(7), ClosingStub(7)))
+    preflight_action_dims("minigrid", cfg, ["distance_min"])
+    assert len(closed) == 2
 
 
 # --- one process per family (F24) ------------------------------------------

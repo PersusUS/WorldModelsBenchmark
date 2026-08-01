@@ -27,14 +27,26 @@ benchmark:
         domain_name: "walker"
         task_name: "run"
         params: {}
+    # Was cheetah/run -> reacher/easy, which cannot be run at all: reacher has
+    # 2 actuators and cheetah 6, and one world model spans both tasks, so its
+    # GRU has a single action width (F25). Padding reacher's actions out to 6
+    # was the alternative and was rejected: four action dimensions would sit at
+    # zero for the whole of task B, and RD then rolls out task-A actions that
+    # use them, so part of the measured forgetting would be the model's
+    # response to dead inputs rather than a difference in dynamics.
+    #
+    # walker/stand shares cheetah's 6 actuators and changes both the body and
+    # the objective, where distance_med changes only the body. Whether that is
+    # really the larger change is not asserted: d_trans measures it, and
+    # distance_med came out at 6.99 +- 3.00.
     distance_max:
       task_A:
         domain_name: "cheetah"
         task_name: "run"
         params: {}
       task_B:
-        domain_name: "reacher"
-        task_name: "easy"
+        domain_name: "walker"
+        task_name: "stand"
         params: {}
 
 # Training protocol. These values are what `experiments/run_full_benchmark.py`

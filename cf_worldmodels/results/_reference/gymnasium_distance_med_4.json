@@ -1,0 +1,61 @@
+{
+  "d_trans": 18.519140243530273,
+  "heldout_reconstruction_B_from_scratch": 28.73954032897949,
+  "heldout_reconstruction_A_from_scratch": 34.639336853027345,
+  "final_reconstruction_loss_A": 29.430021286010742,
+  "final_reconstruction_loss_B": 29.076812744140625,
+  "n_nan_steps_A": 0,
+  "n_nan_steps_B": 0,
+  "family": "gymnasium",
+  "distance": "distance_med",
+  "seed": 4,
+  "protocol": {
+    "n_collect": 20,
+    "n_train": 5000,
+    "batch_size": 8,
+    "seq_len": 5,
+    "learning_rate": 0.001,
+    "curve_points": 20,
+    "n_eval_episodes": 10,
+    "n_eval_transitions": 100,
+    "n_fisher_transitions": 50,
+    "n_recon_frames": 200,
+    "rd_horizon": 15,
+    "rd_samples": 50,
+    "ewc_lambda": 1000.0,
+    "mc_dropout_T_train": 3,
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "wmf_weights": {
+      "alpha": 0.4,
+      "beta": 0.4,
+      "gamma": 0.2
+    },
+    "latent_dim": 32,
+    "hidden_dim": 512,
+    "beta_kl": 1.0
+  },
+  "tasks": {
+    "task_A": {
+      "env_id": "HalfCheetah-v4",
+      "params": {
+        "gravity": 9.8,
+        "mass_scale": 1.0,
+        "friction_scale": 1.0
+      }
+    },
+    "task_B": {
+      "env_id": "HalfCheetah-v4",
+      "params": {
+        "gravity": 4.0,
+        "mass_scale": 1.0,
+        "friction_scale": 1.0
+      }
+    }
+  }
+}

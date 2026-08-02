@@ -47,6 +47,8 @@ def test_wmf_is_weighted_mean_over_tasks():
 
 
 def test_wmf_gamma_weights_pis():
+    """The term is still in Eq. 6, and Eq. 6 is what compute_wmf reproduces.
+    What is withdrawn (D18) is PIS as a reported metric, not this argument."""
     wmf = compute_wmf([0.0], [0.0], [5.0], alpha=0.4, beta=0.4, gamma=0.2)
     assert wmf == pytest.approx(1.0)
 

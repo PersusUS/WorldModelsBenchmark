@@ -534,6 +534,10 @@ def run_cell(method, buffers, action_dim, device, seed, family, distance,
                     horizon=protocol["rd_horizon"],
                     n_samples=protocol["rd_samples"])
     weights = protocol["wmf_weights"]
+    # The 0.0 is not a measurement of PIS: it is the value the previous paper's
+    # Eq. 6 was effectively evaluated at, and reproducing that equation is the
+    # only reason WMF is still computed (D10, D18). What gets stored under
+    # "pis" below is null, because nothing was measured.
     wmf = compute_wmf([pf], [rd], [0.0], alpha=weights["alpha"],
                       beta=weights["beta"], gamma=weights["gamma"])
 
@@ -570,13 +574,19 @@ def run_cell(method, buffers, action_dim, device, seed, family, distance,
 
     metrics = {
         # Forgetting metrics (Section 3.2). PF and RD are what the benchmark
-        # reports; WMF is kept because it is the paper's Eq. 6, but it is an
-        # aggregate of components on different scales, of which RD supplies
-        # 78-97% and PIS a hardcoded zero (F14/P7). PIS is still unimplemented.
+        # reports; WMF is kept because it is the previous paper's Eq. 6, but it
+        # is an aggregate of components on different scales, of which RD
+        # supplies 78-97% (F14/P7).
+        #
+        # PIS is null, not 0.0 (D18/F6). It was never implemented — scoring a
+        # policy trained in imagination needs a controller this repository does
+        # not have — and a stored 0.0 reads as "measured, and it came out zero".
+        # Null is the same convention ft and d_trans use when their reference
+        # was skipped: never measured, never averaged in.
         "pf": pf,
         "rd": rd,
         "wmf": wmf,
-        "pis": 0.0,
+        "pis": None,
         # Forward transfer, measured against a model trained on task B from
         # scratch (F20/P10). None when the reference for this cell was skipped.
         "ft": ft,

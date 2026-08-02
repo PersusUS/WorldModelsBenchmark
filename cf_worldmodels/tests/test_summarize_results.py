@@ -122,6 +122,14 @@ def test_default_tables_lead_with_the_components_not_the_aggregate():
     assert "wmf" not in DEFAULT_METRICS
 
 
+def test_the_reported_suite_is_pf_rd_and_ft():
+    """PIS was announced and never implemented, and is withdrawn rather than
+    reported as a zero (D18/F6). A table of it would be a column of nulls
+    presenting an unimplemented metric as a measured one."""
+    assert DEFAULT_METRICS == ["pf", "rd", "ft"]
+    assert "pis" not in DEFAULT_METRICS
+
+
 def test_rd_share_is_one_when_pf_is_zero():
     runs = [make_run("finetuning", 0, 1.0, pf=0.0, rd=20.0)]
     assert rd_share(runs, "finetuning", "minigrid",

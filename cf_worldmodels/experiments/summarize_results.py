@@ -258,9 +258,12 @@ def rd_share(runs, method, family, distance, weights=(0.4, 0.4)):
 def print_aggregate_section(runs, methods, families, distances):
     """WMF, plus the diagnostic that says how much of it is RD."""
     print("=" * 78)
-    print("LEGACY AGGREGATE (Eq. 6): WMF = 0.4*PF + 0.4*RD + 0.2*PIS, with PIS")
-    print("hardcoded to 0. Printed for continuity with the paper, not as the")
-    print("headline number - the share column says why.")
+    print("LEGACY AGGREGATE (Eq. 6): WMF = 0.4*PF + 0.4*RD + 0.2*PIS. The")
+    print("benchmark's suite is PF, RD and FT; PIS was withdrawn, never having")
+    print("been implemented (D18), and its term is evaluated at zero - which is")
+    print("what the previous paper's WMF numbers were computed with too. This")
+    print("is printed to reproduce them, not as a headline: the share column")
+    print("says why.")
     print("=" * 78)
     print_metric_table(runs, methods, families, distances, "wmf")
 

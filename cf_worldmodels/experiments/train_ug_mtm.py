@@ -140,8 +140,9 @@ def run_single(cfg, distance, seed, steps, no_wandb, method="ug_mtm"):
 
     pf = compute_pf(model_i, model, eval_dataset, device)
     rd = compute_rd(model_i, model, eval_dataset, horizon=15, n_samples=50)
-    pis = 0.0
-    wmf = compute_wmf([pf], [rd], [pis])
+    # The zero is Eq. 6's gamma term, not a measurement: PIS is not part of the
+    # suite (D18) and was never implemented. Stored as null below.
+    wmf = compute_wmf([pf], [rd], [0.0])
 
     nll_before = compute_nll(model_i, eval_dataset, device)
     model_random = UG_MTM(ug_cfg).to(device)
@@ -160,7 +161,7 @@ def run_single(cfg, distance, seed, steps, no_wandb, method="ug_mtm"):
     )
 
     metrics = {
-        "wmf": wmf, "ft": ft, "pf": pf, "rd": rd, "pis": pis,
+        "wmf": wmf, "ft": ft, "pf": pf, "rd": rd, "pis": None,
         "initial_reconstruction_loss": init_A,
         "final_reconstruction_loss": final_B,
     }

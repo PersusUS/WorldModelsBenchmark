@@ -1,10 +1,19 @@
 """
 Benchmark metrics for measuring catastrophic forgetting in world models.
-PF: Prediction Fidelity
-RD: Rollout Divergence
-PIS: Policy Impact Score
-WMF: World Model Forgetting (aggregate)
-FT: Forward Transfer
+
+The suite the benchmark reports is PF, RD and FT:
+
+PF:  Prediction Fidelity
+RD:  Rollout Divergence
+FT:  Forward Transfer
+WMF: World Model Forgetting — the previous paper's Eq. 6, kept so that number
+     can be reproduced, not as the headline (D10)
+
+PIS (Policy Impact Score) is **not** part of the suite and has no function
+here. It was announced but never implemented: scoring a policy trained inside
+the model's imagination needs a controller this repository does not have, and
+building one is a project, not a metric (D18/F6). The gamma term of `compute_wmf`
+survives it because Eq. 6 has one.
 """
 from typing import List
 import torch
@@ -148,9 +157,15 @@ def compute_wmf(pf_list: List[float], rd_list: List[float],
                 alpha: float = 0.4, beta: float = 0.4,
                 gamma: float = 0.2) -> float:
     """
-    World Model Forgetting (aggregate).
+    World Model Forgetting (aggregate) — the previous paper's Eq. 6.
     WMF = (1/(k-1)) sum [alpha*PF + beta*RD + gamma*PIS]
     Raises ValueError if alpha + beta + gamma != 1.0
+
+    `pis_list` is kept because the equation has that term, not because the
+    benchmark measures it: PIS was withdrawn from the suite (D18) and the
+    runner passes zeros, which is what the previous paper's numbers were
+    effectively computed with. Callers reporting the benchmark should read PF
+    and RD separately (D10) rather than this.
     """
     if abs(alpha + beta + gamma - 1.0) > 1e-6:
         raise ValueError(

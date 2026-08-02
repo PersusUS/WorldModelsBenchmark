@@ -2,11 +2,11 @@
 The benchmark's main figure: forgetting as a function of dynamic distance.
 
 One row per reported metric (PF and RD) and one column per family. There is no
-WMF panel on purpose: with PIS hardcoded to zero the aggregate is
-0.4*PF + 0.4*RD, of which RD supplies 78-97%, so a WMF panel is an RD panel
-with a different label. `summarize_results.py` still prints WMF next to the
-share of it that comes from RD; every table belongs there, and this file only
-draws.
+WMF panel on purpose: the benchmark's suite is PF, RD and FT, and with PIS
+withdrawn (D18) the aggregate is 0.4*PF + 0.4*RD, of which RD supplies 78-97%,
+so a WMF panel is an RD panel with a different label. `summarize_results.py`
+still prints WMF next to the share of it that comes from RD, to reproduce the
+previous paper's number; every table belongs there, and this file only draws.
 
 The X axis is the measured distance between the two environments, not an
 ordinal label. `d_trans` (Eq. 9) is computed for all three families now, so it

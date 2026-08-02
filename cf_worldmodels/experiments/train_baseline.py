@@ -217,11 +217,10 @@ def main():
     rd = compute_rd(model_i, model, eval_dataset, horizon=15, n_samples=50)
     print(f"RD = {rd:.4f}")
 
-    # PIS: simplified as 0 for now (requires policy training)
-    pis = 0.0
-
-    # WMF
-    wmf = compute_wmf([pf], [rd], [pis])
+    # WMF, the previous paper's Eq. 6. Its gamma term is evaluated at zero:
+    # PIS is not part of the suite (D18) and was never implemented, so nothing
+    # is measured to put there. Stored as null below, not as 0.0.
+    wmf = compute_wmf([pf], [rd], [0.0])
     print(f"WMF = {wmf:.4f}")
 
     # FT
@@ -248,7 +247,7 @@ def main():
         "ft": ft,
         "pf": pf,
         "rd": rd,
-        "pis": pis,
+        "pis": None,
         "initial_reconstruction_loss": init_A,
         "final_reconstruction_loss": final_B,
     }

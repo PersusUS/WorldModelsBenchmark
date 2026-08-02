@@ -166,17 +166,20 @@ files, which are.
 
 ## Metrics
 
+The suite is **PF, RD and FT**. An earlier description of this benchmark
+announced a fourth, PIS (Policy Impact Score); it is not part of the suite and
+never was implemented — see Known limitations.
+
 - **PF** (Prediction Fidelity) — `NLL(M_k, D_i) - NLL(M_i, D_i)`. Positive means
   the model got worse at task *i* after training on later tasks.
 - **RD** (Rollout Divergence) — mean KL between imagined rollouts of the model
   before and after the task switch.
-- **PIS** (Policy Impact Score) — reserved in the metrics schema; reported as
-  `0.0` in this release (see Known limitations).
 - **WMF** = `alpha*PF + beta*RD + gamma*PIS`, with `alpha=beta=0.4, gamma=0.2`.
-  Computed and stored, but **not the headline number**: PIS is a hardcoded zero
-  and RD supplies 78-97% of the rest, so `summarize_results.py` reports PF and RD
-  side by side and prints WMF under a heading that says what it is, next to the
-  share of it that comes from RD.
+  Computed and stored, but **not the headline number**: RD supplies 78-97% of
+  it, so `summarize_results.py` reports PF and RD side by side and prints WMF
+  under a heading that says what it is, next to the share of it that comes from
+  RD. It is there to reproduce the previous paper's number, and its `gamma`
+  term is evaluated at zero — which is what that number was computed with.
 - **FT** (Forward Transfer) — `recon_B(trained from scratch) -
   recon_B(pretrained on A)`, on held-out task-B frames in pixel space. Positive
   means knowledge of task A helped learn task B under the same budget and the
@@ -293,6 +296,18 @@ aware of before building on it.
    clears and re-registers its backward hooks on every call, so after unrolling
    a sequence the gradients for the whole sequence are scaled by the gates
    computed at the last step.
+
+8. **PIS was announced and is not part of the suite.** An earlier description of
+   this benchmark listed a fourth metric, PIS (Policy Impact Score), meant to
+   score how much a task switch costs a policy. It was never implemented:
+   measuring it means training a controller inside the model's imagination and
+   evaluating it in the real environment, and no controller ships here. It is
+   withdrawn rather than reported — the suite is PF, RD and FT — and `pis` is
+   stored as `null`, the same way `ft` and `d_trans` are when their reference
+   model was skipped. Runs produced before this change stored `0.0`; the
+   aggregation treats null and 0.0 alike here, because the `gamma` term of WMF
+   was evaluated at zero either way, which is also what the previous paper's
+   WMF numbers were computed with.
 
 ## Citation
 

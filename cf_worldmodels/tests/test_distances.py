@@ -4,7 +4,12 @@ import copy
 import pytest
 import torch
 
-from src.benchmark.distances import compute_d_param, compute_d_trans
+from src.benchmark.distances import (
+    PHYSICS_PARAMS,
+    compute_d_param,
+    compute_d_trans,
+    d_param_for_pair,
+)
 from src.models.rssm import RSSM
 
 from conftest import LATENT_DIM, HIDDEN_DIM, ACTION_DIM
@@ -64,6 +69,37 @@ def test_d_param_matches_benchmark_config_ordering():
         )
     assert values == sorted(values)
     assert values[0] > 0.0
+
+
+# --- d_param_for_pair: where Eq. 8 says nothing -----------------------------
+
+def test_d_param_for_pair_is_none_when_the_environment_itself_changes():
+    """cheetah -> walker changes everything and leaves the physics vector at
+    its default on both sides, so Eq. 8 would score the largest construction
+    change in that family as a zero. That gap is why Eq. 9 exists."""
+    swap = {"task_A": {"domain_name": "cheetah", "task_name": "run",
+                       "params": {}},
+            "task_B": {"domain_name": "walker", "task_name": "run",
+                       "params": {}}}
+    assert d_param_for_pair(swap) is None
+    # And the trap it exists to avoid: the raw equation happily returns 0.
+    assert compute_d_param({}, {}) == pytest.approx(0.0)
+
+
+def test_d_param_for_pair_scores_a_pure_physics_perturbation():
+    physics = {"task_A": {"env_id": "HalfCheetah-v4",
+                          "params": {"gravity": 9.8, "mass_scale": 1.0,
+                                     "friction_scale": 1.0}},
+               "task_B": {"env_id": "HalfCheetah-v4",
+                          "params": {"gravity": 4.0, "mass_scale": 1.0,
+                                     "friction_scale": 1.0}}}
+    assert d_param_for_pair(physics) == pytest.approx(0.5858, abs=1e-4)
+
+
+def test_physics_params_is_the_vector_the_equation_differences():
+    """The key list is shared with the paper's task-table labels; if the two
+    ever disagree, a perturbation gets scored and not printed."""
+    assert list(PHYSICS_PARAMS) == ["gravity", "mass_scale", "friction_scale"]
 
 
 # --- d_trans ---------------------------------------------------------------

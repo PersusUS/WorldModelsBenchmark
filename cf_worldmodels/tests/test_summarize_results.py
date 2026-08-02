@@ -14,8 +14,11 @@ from experiments.summarize_results import (
     AXIS_METHODS,
     DEFAULT_METRICS,
     axis_value,
+    cell_d_trans,
     cell_summary,
+    cell_tasks,
     cell_values,
+    check_runs_consistent,
     control_cells,
     rd_share,
     effect_size,
@@ -61,6 +64,64 @@ def test_loads_every_run_directory(tmp_path):
 
 def test_empty_directory_loads_nothing(tmp_path):
     assert load_runs(tmp_path) == []
+
+
+# --- directory consistency: what every consumer of load_runs inherits ------
+
+def test_consistent_runs_pass():
+    tasks = {"task_A": {"env_id": "A"}, "task_B": {"env_id": "B"}}
+    check_runs_consistent([make_run("finetuning", s, 1.0, tasks=tasks)
+                           for s in range(5)])
+
+
+def test_two_budgets_in_one_directory_are_refused():
+    runs = [make_run("finetuning", 0, 1.0),
+            make_run("finetuning", 1, 1.0,
+                     protocol=dict(PROTOCOL, n_train=5000))]
+    with pytest.raises(ValueError, match="different protocols"):
+        check_runs_consistent(runs)
+
+
+def test_a_cell_that_mixes_task_pairs_is_refused():
+    """F26: a level was edited and half a cell's seeds came from the
+    environment pair it used to name. Every table medians over the cell, so
+    nothing downstream would notice."""
+    pair = {"task_A": {"domain_name": "cheetah", "task_name": "run"},
+            "task_B": {"domain_name": "walker", "task_name": "run"}}
+    stale = {"task_A": pair["task_A"],
+             "task_B": {"domain_name": "walker", "task_name": "stand"}}
+    runs = [make_run("finetuning", 0, 1.0, family="dmcontrol", tasks=pair),
+            make_run("finetuning", 1, 1.0, family="dmcontrol", tasks=stale)]
+    with pytest.raises(ValueError, match="more than one task pair"):
+        check_runs_consistent(runs)
+
+
+def test_the_same_pair_in_two_different_cells_is_fine():
+    """Two levels may legitimately share a task pair; only mixing *within* a
+    cell is the error."""
+    pair = {"task_A": {"env_id": "A"}, "task_B": {"env_id": "B"}}
+    check_runs_consistent([
+        make_run("finetuning", 0, 1.0, distance="distance_min", tasks=pair),
+        make_run("finetuning", 0, 1.0, distance="distance_med", tasks=pair),
+    ])
+
+
+def test_cell_tasks_and_cell_d_trans_read_one_cell():
+    pair = {"task_A": {"env_id": "A"}, "task_B": {"env_id": "B"}}
+    runs = [make_run(m, s, 1.0, tasks=pair, d_trans=7.0)
+            for m in ("finetuning", "ewc") for s in range(3)]
+    assert cell_tasks(runs, "minigrid", "distance_med") == pair
+    # d_trans belongs to the pair and the seed, not the method: five methods
+    # storing the same value must collapse to one per seed, not to five.
+    assert cell_d_trans(runs, "minigrid", "distance_med") == {0: 7.0, 1: 7.0,
+                                                              2: 7.0}
+
+
+def test_cell_d_trans_drops_a_stored_null():
+    """--skip-reference stores null; counting it as zero invents a distance."""
+    runs = [make_run("finetuning", 0, 1.0, d_trans=None),
+            make_run("finetuning", 1, 1.0, d_trans=4.0)]
+    assert cell_d_trans(runs, "minigrid", "distance_med") == {1: 4.0}
 
 
 # --- protocol consistency --------------------------------------------------

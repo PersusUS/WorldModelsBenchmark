@@ -102,6 +102,68 @@ def shared_protocol(runs: list):
     return json.loads(protocols[0])
 
 
+def check_runs_consistent(runs: list) -> None:
+    """
+    Refuse a results directory whose runs cannot be aggregated together.
+
+    Two ways a cell stops meaning one thing, and both have happened: runs made
+    under different budgets (the runner's own check, `check_protocol_consistency`)
+    and runs made on different environment pairs after a level was edited
+    (F26). The runner catches both before training; this catches them before
+    *reading*, so every consumer of `load_runs` inherits one notion of a
+    consistent directory instead of each table builder inventing its own.
+
+    Raises ValueError. A warning would be wrong here: the failure is silent
+    averaging, and a warning is what gets scrolled past.
+    """
+    with_protocol = [r for r in runs if r.get("protocol")]
+    if with_protocol and shared_protocol(with_protocol) is None:
+        distinct = len({json.dumps(r["protocol"], sort_keys=True)
+                        for r in with_protocol})
+        raise ValueError(
+            f"{distinct} different protocols across {len(with_protocol)} "
+            "runs: they were produced under different budgets and cannot be "
+            "aggregated. Archive the odd ones or restrict the results "
+            "directory."
+        )
+
+    by_cell = {}
+    for run in runs:
+        if run.get("tasks") is None:
+            continue
+        by_cell.setdefault((run.get("family"), run.get("distance")),
+                           []).append(run)
+    for (family, distance), cell in by_cell.items():
+        first = cell[0]["tasks"]
+        if any(r["tasks"] != first for r in cell):
+            raise ValueError(
+                f"{family}/{distance} contains runs from more than one task "
+                "pair; a level was edited and stale results were left behind."
+            )
+
+
+def cell_tasks(runs: list, family: str, distance: str):
+    """The task pair one cell was run on, or None if no run recorded it."""
+    for run in runs:
+        if (run.get("family") == family and run.get("distance") == distance
+                and run.get("tasks")):
+            return run["tasks"]
+    return None
+
+
+def cell_d_trans(runs: list, family: str, distance: str) -> dict:
+    """
+    {seed: d_trans} for one cell.
+
+    d_trans is a property of the task pair and the seed, not of the method, so
+    every method's run in a cell stores the same value and this collapses them.
+    A stored null is absent, not zero, for the reason `cell_values` gives.
+    """
+    return {r["seed"]: r["d_trans"] for r in runs
+            if r.get("family") == family and r.get("distance") == distance
+            and r.get("d_trans") is not None}
+
+
 def cell_values(runs: list, method: str, family: str, distance: str,
                 key: str) -> dict:
     """
@@ -296,10 +358,7 @@ def print_distance_table(runs, families, distances):
     values = {}
     for family in families:
         for distance in distances:
-            per_seed = {r["seed"]: r["d_trans"] for r in runs
-                        if r.get("family") == family
-                        and r.get("distance") == distance
-                        and r.get("d_trans") is not None}
+            per_seed = cell_d_trans(runs, family, distance)
             if per_seed:
                 values[(family, distance)] = list(per_seed.values())
     if not values:
@@ -582,12 +641,18 @@ def main(argv=None):
     distances = [d for d in args.distances if any(p[2] == d for p in present)]
 
     print(f"{len(runs)} run(s) from {args.results_dir}")
+    # This tool warns where `export_tables.py` raises, and on purpose: the
+    # numbers below are how you diagnose an inconsistent directory, so
+    # refusing to print them is refusing to help. The paper's tables are the
+    # opposite case and stop.
+    try:
+        check_runs_consistent(runs)
+    except ValueError as problem:
+        print(f"\nWARNING: {problem}\nEvery aggregate below mixes them — fix "
+              "the directory before reading the numbers.\n")
+
     protocol = shared_protocol(runs)
-    if protocol is None:
-        print("\nWARNING: these runs do NOT share one protocol. Any mean below "
-              "averages different training budgets — fix the directory before "
-              "reading the numbers.\n")
-    else:
+    if protocol is not None:
         print(f"protocol: n_train={protocol['n_train']} "
               f"n_collect={protocol['n_collect']} "
               f"batch_size={protocol['batch_size']} "

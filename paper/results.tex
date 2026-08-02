@@ -66,6 +66,15 @@ Three out of three is the most robust part of this result: it does not depend on
 how cells are aggregated, on which of the two forgetting metrics is read, or on
 any threshold.
 
+Gymnasium makes the point without any appeal to how the levels compare across
+families, because there the two upper levels are nested by construction. Both
+move HalfCheetah from gravity $9.8$ to $4.0$; the maximum level additionally
+scales mass by $3$ and friction by $0.5$. It is strictly the medium
+perturbation plus more perturbation, and it produces \emph{less} forgetting
+($59.59$ against $85.91$). The measured distance agrees with the outcome rather
+than with the construction: $d_{\mathrm{trans}}$ is $24.71$ at the maximum level
+against $30.86$ at the medium one.
+
 The aggregate in Table~\ref{tab:axis} deliberately excludes UG-MTM. It freezes
 its encoder, which puts its RD two orders of magnitude below the other four
 methods in DMControl ($0.002$ against $1.2$); pooling all five would average two

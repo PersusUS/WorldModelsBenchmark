@@ -34,11 +34,18 @@ distance for every task pair, and treat level labels as construction parameters
 rather than as an independent variable.} $d_{\mathrm{trans}}$ costs one model per
 environment --- in our grid, a 20\% surcharge on the total training budget --- and
 it is defined wherever transitions can be sampled, including families where no
-parameter vector exists to difference. It is not a finished instrument: it
+parameter vector exists to difference. It is not a finished instrument. It
 recovers the RD ordering in Gymnasium, separates DMControl's minimum from the
-rest, and fails in MiniGrid. But it is measured, it is comparable across
-families, and on these nine cells it outranks the hand-designed axis by an order
-of magnitude in rank correlation ($0.53$ against $0.05$).
+rest, and fails in MiniGrid; and as we compute it, the two reference models are
+trained independently, so one of them is scored in the other's latent basis and
+part of what it reports is basis mismatch rather than a difference in dynamics
+(Section~\ref{sec:method:distances}). That is why we use it to rank cells and
+not to compare magnitudes across families, and it is the first thing we would
+fix --- a reference pair sharing one frozen encoder trained on both tasks would
+remove the confound at the cost of one more sweep. What survives those caveats
+is that the quantity is measured rather than asserted, and that on these nine
+cells it outranks the hand-designed axis by an order of magnitude in rank
+correlation ($0.53$ against $0.05$).
 
 \subsection{Two things called ``distance'' are being conflated}
 \label{sec:discussion:conflation}
@@ -195,7 +202,11 @@ seeds is the cheapest improvement available and the one we would make first.
 The grid is nine cells of which six discriminate, one task switch rather than a
 sequence, and one architecture family: every method here is a variation on the
 same recurrent latent world model, so the results speak to that class and not to
-world models in general. The budget --- 20 random-policy episodes per task and
+world models in general. Our own measured distance inherits a confound we
+declare but did not remove --- it scores one environment's transition model in
+the other's latent basis --- which bounds how much weight the
+$d_{\mathrm{trans}}$ half of Section~\ref{sec:results:predictors} can carry. The
+budget --- 20 random-policy episodes per task and
 5000 gradient updates --- is small enough that absolute magnitudes are
 budget-dependent, although task~A is demonstrably learned at this scale, which is
 the precondition a forgetting benchmark has to establish before any of its

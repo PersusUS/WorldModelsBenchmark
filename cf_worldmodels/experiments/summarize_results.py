@@ -6,10 +6,21 @@ runner writes one metrics.json per (method, family, distance, seed); this reads
 them back, checks they were produced under one protocol, and prints:
 
   * the protocol they share, once;
-  * mean +- std per cell for the forgetting metrics;
+  * median [min, max] per cell for the forgetting metrics;
+  * whether the labelled distance level predicts forgetting at all (F27);
+  * which cells produced no forgetting in any method, i.e. the controls (F22);
   * the task-A quality columns (F17/F18), which are what tell you whether there
     was anything to forget and whether the metrics saw it;
   * an optional paired comparison between two methods.
+
+On the median: cells are summarised by their median and their full seed range,
+not by mean +- std (D15/P12). RD is a KL and is unbounded above, so a method
+that produces an overconfident post-task-B model gets a heavy right tail by
+construction — ug_mtm on minigrid/distance_max runs 17.7, 40.0, 520, 574, 4364
+across its five seeds (F23), and a mean of those describes none of them. The
+skew is not noise to be smoothed away: cells whose upper half stretches five
+times further than their lower half are marked with `!` and listed underneath,
+because that is a finding about the method, not a nuisance.
 
 On the paired comparison: it is seed-paired, because two methods on the same seed
 share their data and their initialisation, and pairing removes that variance. Two
@@ -46,9 +57,18 @@ from experiments.run_full_benchmark import DISTANCES, FAMILY_CONFIGS, METHODS
 # a heading that says what it is. FT is forward transfer measured against a
 # model trained on task B from scratch (F20/P10).
 DEFAULT_METRICS = ["pf", "rd", "ft"]
+# The four methods that share the RSSM architecture. The distance-axis section
+# (F27) is about the axis, not about the methods, so it aggregates over these
+# and leaves ug_mtm out: ug_mtm freezes its encoder, which puts its RD two
+# orders of magnitude below the others in dmcontrol (0.002 against 1.2), and an
+# aggregate over all five would be an average of two scales rather than a
+# reading of the axis. The exclusion is declared here and printed in the
+# section header; --axis-methods overrides it.
+AXIS_METHODS = ["finetuning", "replay_infinite", "ewc", "progressive_nets"]
 # family[:3] would abbreviate minigrid to "min", and a column headed "min_med"
 # reads as "minimum median" rather than "MiniGrid, medium distance".
 FAMILY_ABBREV = {"minigrid": "mgrid", "gymnasium": "gym", "dmcontrol": "dmc"}
+CELL_WIDTH = 23
 QUALITY_COLUMNS = [
     ("heldout_reconstruction_A_after_task_A", "recon A|after A"),
     ("heldout_reconstruction_A_after_task_B", "recon A|after B"),
@@ -141,7 +161,51 @@ def effect_size(diffs: np.ndarray) -> float:
     return float("inf") if sd == 0 else float(np.mean(diffs)) / sd
 
 
-def print_metric_table(runs, methods, families, distances, key):
+def is_right_skewed(values, factor: float = 5.0) -> bool:
+    """
+    True when the upper half of the sample stretches `factor` times further
+    from the median than the lower half does.
+
+    The test is on order statistics rather than on mean/median or a coefficient
+    of variation, both of which fire on cells that merely straddle zero — EWC's
+    PF sits at -0.005 with a spread of 0.083 and is perfectly symmetric. What
+    this catches is the shape that makes a mean meaningless: one seed an order
+    of magnitude above the rest (F23).
+    """
+    v = sorted(float(x) for x in values)
+    if len(v) < 3:
+        return False
+    median = float(np.median(v))
+    return (v[-1] - median) > factor * (median - v[0])
+
+
+def cell_summary(values, flag_skew: bool = True) -> str:
+    """
+    One cell as `median [min, max]`, with `!` if the sample is right-skewed.
+
+    Four significant figures rather than three decimals: the same column has to
+    hold -0.062 and 4364, and a fixed decimal count either loses EWC's PF or
+    prints eight characters of noise on ug_mtm's RD.
+    """
+    v = sorted(float(x) for x in values)
+    if not v:
+        return "N/A"
+    mark = "!" if flag_skew and is_right_skewed(v) else ""
+    return f"{np.median(v):+.4g} [{v[0]:.4g},{v[-1]:.4g}]{mark}"
+
+
+def print_metric_table(runs, methods, families, distances, key,
+                       flag_skew: bool = True):
+    """
+    One table of `key`, and the list of cells whose sample is skewed.
+
+    `flag_skew` is off for the pixel columns. The marker is there to say that a
+    mean would have been the wrong summary, which is a statement about metrics
+    that are unbounded above — RD is a KL, PF a difference of NLLs. A held-out
+    reconstruction error is bounded by the data, and marking the ordinary 25-35
+    spread of a Gymnasium baseline would point at everything and therefore at
+    nothing. The range is printed either way.
+    """
     # The metric name goes on its own line: as a corner cell it would be wider
     # than the method column for the longer keys and skew every row under it.
     print(f"{key}:")
@@ -149,22 +213,26 @@ def print_metric_table(runs, methods, families, distances, key):
     for family in families:
         for distance in distances:
             col = f"{FAMILY_ABBREV.get(family, family[:5])}_{distance.split('_')[1]}"
-            header += f" | {col:>17}"
+            header += f" | {col:>{CELL_WIDTH}}"
     print(header)
     print("-" * len(header))
 
+    skewed = []
     for method in methods:
         row = f"{method:<20}"
         for family in families:
             for distance in distances:
                 values = list(cell_values(runs, method, family, distance,
                                           key).values())
-                if values:
-                    cell = f"{np.mean(values):+.3f}+-{np.std(values):.3f}"
-                else:
-                    cell = "N/A"
-                row += f" | {cell:>17}"
+                if flag_skew and values and is_right_skewed(values):
+                    skewed.append((method, family, distance, sorted(values)))
+                row += f" | {cell_summary(values, flag_skew):>{CELL_WIDTH}}"
         print(row)
+
+    for method, family, distance, values in skewed:
+        seeds = ", ".join(f"{v:.4g}" for v in values)
+        print(f"  ! {method} / {family} / {distance}: {seeds}"
+              f"  (mean {np.mean(values):.4g} vs median {np.median(values):.4g})")
     print()
 
 
@@ -201,7 +269,7 @@ def print_aggregate_section(runs, methods, families, distances):
     for family in families:
         for distance in distances:
             col = f"{FAMILY_ABBREV.get(family, family[:5])}_{distance.split('_')[1]}"
-            header += f" | {col:>17}"
+            header += f" | {col:>{CELL_WIDTH}}"
     print(header)
     print("-" * len(header))
     for method in methods:
@@ -210,7 +278,7 @@ def print_aggregate_section(runs, methods, families, distances):
             for distance in distances:
                 share = rd_share(runs, method, family, distance)
                 cell = "N/A" if np.isnan(share) else f"{100 * share:.1f}%"
-                row += f" | {cell:>17}"
+                row += f" | {cell:>{CELL_WIDTH}}"
         print(row)
     print()
 
@@ -238,10 +306,201 @@ def print_distance_table(runs, families, distances):
     print("DYNAMIC DISTANCE d_trans (Eq. 9): KL between the transition models")
     print("of two environments, each trained on its own task from scratch.")
     print("=" * 78)
+    # d_trans keeps its mean and std alongside the median: the claim it has to
+    # support is whether two levels separate, and that is a statement about
+    # spread, not about the centre.
     for (family, distance), vals in values.items():
         print(f"  {family:<10} {distance:<14} "
-              f"d_trans = {np.mean(vals):8.4f} +- {np.std(vals):.4f} "
+              f"d_trans = {np.median(vals):8.4f} "
+              f"[{min(vals):.4f},{max(vals):.4f}]  "
+              f"mean {np.mean(vals):.4f} +- {np.std(vals):.4f} "
               f"(n={len(vals)})")
+    print()
+
+
+def rank(values) -> np.ndarray:
+    """Ranks of `values`, ties averaged. The half of Spearman that scipy would
+    have supplied, written out because scipy is installed here but not declared
+    in requirements.txt, and importing an undeclared dependency is F12."""
+    v = np.asarray(values, dtype=float)
+    order = np.argsort(v, kind="stable")
+    ranks = np.empty(len(v), dtype=float)
+    ranks[order] = np.arange(1, len(v) + 1, dtype=float)
+    for value in np.unique(v):
+        tied = v == value
+        if tied.sum() > 1:
+            ranks[tied] = ranks[tied].mean()
+    return ranks
+
+
+def spearman(x, y) -> float:
+    """Spearman's rho: Pearson's r on the ranks."""
+    if len(x) != len(y):
+        raise ValueError("spearman needs two series of the same length")
+    if len(x) < 2:
+        return float("nan")
+    rx, ry = rank(x) - np.mean(rank(x)), rank(y) - np.mean(rank(y))
+    denominator = float(np.sqrt(np.sum(rx ** 2) * np.sum(ry ** 2)))
+    return float("nan") if denominator == 0 else float(np.sum(rx * ry) / denominator)
+
+
+def axis_value(runs, methods, family, distance, key):
+    """
+    One cell of the distance axis: the median over methods of each method's
+    median over seeds.
+
+    Median twice rather than mean twice, for the two reasons separately. Over
+    seeds, because of the heavy tail (P12). Over methods, because the methods
+    are not five samples of one quantity — they are five different ones, and a
+    mean would let whichever method is furthest out set the family's number.
+    """
+    per_method = []
+    for method in methods:
+        values = list(cell_values(runs, method, family, distance, key).values())
+        if values:
+            per_method.append(float(np.median(values)))
+    return float(np.median(per_method)) if per_method else float("nan")
+
+
+def print_distance_axis_section(runs, axis_methods, families, distances,
+                                key="rd"):
+    """
+    F27: does the labelled distance level predict forgetting, and what does?
+
+    This is the benchmark grading its own design axis, so it prints the axis
+    first (one row per family, so the reader can see the peak for themselves)
+    and only then the rank correlations that summarise it.
+    """
+    cells = [(family, distance) for family in families for distance in distances
+             if not np.isnan(axis_value(runs, axis_methods, family, distance, key))]
+    if len(cells) < 2:
+        return
+
+    print("=" * 78)
+    print(f"DISTANCE AXIS (F27): does the labelled level predict {key.upper()}?")
+    print("Each cell is the median over methods of each method's median over")
+    print("seeds. Methods aggregated: " + ", ".join(axis_methods) + ".")
+    if set(axis_methods) != set(METHODS):
+        left_out = [m for m in METHODS if m not in axis_methods]
+        print("Left out, deliberately: " + ", ".join(left_out) + " - a method")
+        print("that freezes its encoder lands two orders of magnitude away in")
+        print("dmcontrol, so pooling it here would average two scales instead")
+        print("of reading the axis. Its own numbers are in the tables above.")
+    print("=" * 78)
+
+    header = f"  {'family':<12}" + "".join(
+        f"{d.split('_')[1]:>12}" for d in distances) + f"{'peak at':>12}"
+    print(header)
+    for family in families:
+        values = [axis_value(runs, axis_methods, family, d, key)
+                  for d in distances]
+        if all(np.isnan(v) for v in values):
+            continue
+        peak = distances[int(np.nanargmax(values))].split("_")[1]
+        row = f"  {family:<12}" + "".join(
+            ("N/A" if np.isnan(v) else f"{v:.2f}").rjust(12) for v in values)
+        print(row + f"{peak:>12}")
+    print()
+
+    # The predictors, over the same cells. d_trans is a property of the task
+    # pair, so it is read off any run that carries it rather than per method.
+    observed, labels, d_trans, difficulty = [], [], [], []
+    for family, distance in cells:
+        observed.append(axis_value(runs, axis_methods, family, distance, key))
+        labels.append(distances.index(distance))
+        per_seed = [r["d_trans"] for r in runs
+                    if r.get("family") == family and r.get("distance") == distance
+                    and r.get("d_trans") is not None]
+        d_trans.append(float(np.median(per_seed)) if per_seed else float("nan"))
+        difficulty.append(axis_value(runs, axis_methods, family, distance,
+                                     "heldout_reconstruction_B_after_task_B"))
+
+    print(f"Rank correlation (Spearman) with {key}, over the "
+          f"{len(cells)} cells:")
+    for name, predictor in (("labelled level (min<med<max)", labels),
+                            ("d_trans (Eq. 9)", d_trans),
+                            ("task-B difficulty (recon B|after B)", difficulty)):
+        usable = [(o, p) for o, p in zip(observed, predictor) if not np.isnan(p)]
+        if len(usable) < 2:
+            continue
+        rho = spearman([o for o, _ in usable], [p for _, p in usable])
+        print(f"  {name:<38} {rho:+.2f}  (n={len(usable)})")
+    print()
+    print(f"With {len(cells)} cells and families on different scales these are")
+    print("indicative, not conclusive; the repeated peak in the table above is")
+    print("the robust half of the result.")
+    print()
+
+
+def task_a_loss(runs, method, family, distance):
+    """
+    How much of task A the encoder lost, as a fraction of what it had.
+
+    Relative, not absolute: a cell of MiniGrid reconstructs task A at 0.52 and
+    one of DMControl at 14.7, so +0.23 means opposite things in the two. Per
+    seed first and median after, so one seed cannot set the ratio.
+    """
+    before = cell_values(runs, method, family, distance,
+                         "heldout_reconstruction_A_after_task_A")
+    after = cell_values(runs, method, family, distance,
+                        "heldout_reconstruction_A_after_task_B")
+    ratios = [(after[s] - before[s]) / before[s]
+              for s in sorted(set(before) & set(after)) if before[s] > 0]
+    return float(np.median(ratios)) if ratios else float("nan")
+
+
+def control_cells(runs, methods, families, distances, threshold: float = 0.10):
+    """
+    Cells where no method's encoder lost task A (F22/P13).
+
+    `threshold` is a fraction of the task-A error, and 10% is not a knife edge:
+    the cells that do forget sit between +1359% and +78197%, so anything from a
+    few percent to a few hundred would select the same cells. It is stated as a
+    number rather than left implicit because it is the kind of choice a reader
+    is entitled to move.
+    """
+    controls = []
+    for family in families:
+        for distance in distances:
+            losses = [task_a_loss(runs, m, family, distance) for m in methods]
+            losses = [x for x in losses if not np.isnan(x)]
+            if losses and max(losses) <= threshold:
+                controls.append((family, distance))
+    return controls
+
+
+def print_control_section(runs, methods, families, distances,
+                          threshold: float = 0.10):
+    """
+    P13: what each cell did to the encoder's grip on task A, and which cells
+    therefore had nothing to lose.
+
+    Printed as the numbers rather than as a verdict, because the interesting
+    case is the one a verdict would hide: a cell can leave the encoder intact
+    and still move RD, which is F18 seen from the other side.
+    """
+    print("=" * 78)
+    print("TASK-A LOSS PER CELL (F22/P13): median change in task-A")
+    print("reconstruction after training on B, as a fraction of what the model")
+    print("had. Range over methods. This is the pixel scale, so a cell can read")
+    print("~0 here and still move PF and RD - that is F18, not a contradiction.")
+    print("=" * 78)
+    controls = control_cells(runs, methods, families, distances, threshold)
+    for family in families:
+        for distance in distances:
+            losses = {m: task_a_loss(runs, m, family, distance)
+                      for m in methods}
+            losses = {m: v for m, v in losses.items() if not np.isnan(v)}
+            if not losses:
+                continue
+            worst = max(losses, key=losses.get)
+            flag = "  <- nothing lost by anyone" \
+                if (family, distance) in controls else ""
+            print(f"  {family:<10} {distance:<14} "
+                  f"{100 * min(losses.values()):+9.1f}% .. "
+                  f"{100 * losses[worst]:+11.1f}% ({worst}){flag}")
+    print(f"\n  {len(controls)} of {len(families) * len(distances)} cells lose "
+          f"nothing at the {100 * threshold:.0f}% threshold.")
     print()
 
 
@@ -285,6 +544,9 @@ def parse_args(argv=None):
     parser.add_argument("--families", nargs="+", default=list(FAMILY_CONFIGS))
     parser.add_argument("--distances", nargs="+", default=DISTANCES)
     parser.add_argument("--metrics", nargs="+", default=DEFAULT_METRICS)
+    parser.add_argument("--axis-methods", nargs="+", default=AXIS_METHODS,
+                        help="methods aggregated by the distance-axis section "
+                             "(F27); the default leaves ug_mtm out and says so")
     parser.add_argument("--compare", nargs=2, metavar=("METHOD_A", "METHOD_B"),
                         help="seed-paired comparison of two methods")
     return parser.parse_args(argv)
@@ -316,7 +578,7 @@ def main(argv=None):
               f"seeds={protocol['seeds']}")
 
     print("\n" + "=" * 78)
-    print("FORGETTING METRICS (mean +- std across seeds)")
+    print("FORGETTING METRICS (median [min, max] across seeds; ! = right-skewed)")
     print("PF and RD are measured on latents encoded once by the post-task-A")
     print("model, so they score the transition component M in a fixed latent")
     print("basis and are blind to drift in the encoder itself (F18). The pixel")
@@ -325,6 +587,9 @@ def main(argv=None):
     for key in args.metrics:
         print_metric_table(runs, methods, families, distances, key)
 
+    axis_methods = [m for m in args.axis_methods if m in methods]
+    print_distance_axis_section(runs, axis_methods, families, distances)
+    print_control_section(runs, methods, families, distances)
     print_aggregate_section(runs, methods, families, distances)
     print_distance_table(runs, families, distances)
 
@@ -335,7 +600,8 @@ def main(argv=None):
     print("=" * 78)
     for key, label in QUALITY_COLUMNS:
         if any(r.get(key) is not None for r in runs):
-            print_metric_table(runs, methods, families, distances, key)
+            print_metric_table(runs, methods, families, distances, key,
+                               flag_skew=False)
 
     nan_runs = [r for r in runs
                 if r.get("n_nan_steps_A", 0) or r.get("n_nan_steps_B", 0)]

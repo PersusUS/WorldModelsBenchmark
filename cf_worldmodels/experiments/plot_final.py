@@ -46,15 +46,24 @@ METRICS = [("pf", "PF (prediction fidelity)"),
 
 
 def cell(results_root, method, family, distance, key):
-    """(mean, std) of `key` over the seeds of one cell, or (None, None)."""
+    """
+    (median, (down, up)) of `key` over the seeds of one cell, or (None, None).
+
+    Median and full seed range, the same policy the tables use (D15/P12), so
+    the figure and the table cannot disagree about the same cell. The bars are
+    deliberately asymmetric: RD is an unbounded KL and a method that ends up
+    overconfident gets a long tail upward only (F23), which a symmetric std
+    would draw as an equal error in both directions.
+    """
     values = []
     for path in results_root.glob(f"{method}/{family}_{distance}_*/metrics.json"):
         value = json.load(open(path)).get(key)
         if value is not None:
-            values.append(value)
+            values.append(float(value))
     if not values:
         return None, None
-    return float(np.mean(values)), float(np.std(values))
+    median = float(np.median(values))
+    return median, (median - min(values), max(values) - median)
 
 
 def distance_axis(results_root, family):
@@ -71,7 +80,7 @@ def distance_axis(results_root, family):
             for path in results_root.glob(f"*/{family}_{distance}_*/metrics.json")
         ]
         values = [v for v in values if v is not None]
-        xs.append(float(np.mean(values)) if values else None)
+        xs.append(float(np.median(values)) if values else None)
 
     if all(x is not None for x in xs):
         return xs, [f"{x:.2f}" for x in xs], "Dynamic distance $d_{trans}$"
@@ -89,20 +98,25 @@ def draw(results_root, out_dir, stem):
 
         for row, (key, metric_label) in enumerate(METRICS):
             ax = axes[row][col]
-            means_seen = []
+            extent_seen = []
             for i, (method, label) in enumerate(zip(METHODS, LABELS)):
-                means, stds, xs = [], [], []
+                medians, spreads, xs = [], [], []
                 for x, distance in zip(xvals, DISTANCES):
-                    mean, std = cell(results_root, method, family, distance, key)
-                    if mean is not None:
-                        means.append(mean)
-                        stds.append(std)
+                    median, spread = cell(results_root, method, family,
+                                          distance, key)
+                    if median is not None:
+                        medians.append(median)
+                        spreads.append(spread)
                         xs.append(x)
-                if not means:
+                if not medians:
                     continue
-                means_seen.extend(means)
+                # What the panel has to fit is the bars, not the centres: the
+                # seed that makes a cell heavy-tailed is a bar end, and it is
+                # the reason the axis needs a log scale at all.
+                extent_seen.extend(m - d for m, (d, _) in zip(medians, spreads))
+                extent_seen.extend(m + u for m, (_, u) in zip(medians, spreads))
                 ax.errorbar(
-                    xs, means, yerr=stds, label=label,
+                    xs, medians, yerr=np.array(spreads).T, label=label,
                     color=COLORS[i], linestyle=LINES[i], marker=MARKERS[i],
                     linewidth=LW[i], markersize=6, capsize=4,
                     zorder=5 if method == "ug_mtm" else 2,
@@ -127,8 +141,8 @@ def draw(results_root, out_dir, stem):
             ax.grid(True, alpha=0.25, linestyle="--")
             ax.tick_params(labelsize=9)
 
-            if key == "rd" and means_seen and min(means_seen) > 0 and \
-                    max(means_seen) / min(means_seen) > 50:
+            if key == "rd" and extent_seen and min(extent_seen) > 0 and \
+                    max(extent_seen) / min(extent_seen) > 50:
                 # RD is a KL, so it is non-negative, and it spans three orders
                 # of magnitude once UG-MTM's outlier cell is in (F23). On a
                 # linear axis that one point flattens every other method to

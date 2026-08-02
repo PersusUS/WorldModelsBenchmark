@@ -43,12 +43,28 @@ def test_the_figure_plots_the_reported_metrics_not_the_aggregate():
     assert [key for key, _ in METRICS] == ["pf", "rd"]
 
 
-def test_cell_averages_over_seeds(tmp_path):
+def test_cell_summarises_seeds_by_median_and_range(tmp_path):
+    """Same policy as the tables (D15/P12), so the figure and the table cannot
+    describe the same cell differently."""
     write_run(tmp_path, "finetuning", "minigrid", "distance_min", 0, pf=1.0)
     write_run(tmp_path, "finetuning", "minigrid", "distance_min", 1, pf=3.0)
-    mean, std = cell(tmp_path, "finetuning", "minigrid", "distance_min", "pf")
-    assert mean == pytest.approx(2.0)
-    assert std == pytest.approx(1.0)
+    median, spread = cell(tmp_path, "finetuning", "minigrid", "distance_min",
+                          "pf")
+    assert median == pytest.approx(2.0)
+    assert spread == pytest.approx((1.0, 1.0))
+
+
+def test_cell_error_bars_are_asymmetric_when_the_seeds_are(tmp_path):
+    """RD is an unbounded KL: one seed can sit three orders of magnitude above
+    the rest (F23) and a symmetric bar would draw that tail downward too."""
+    for seed, value in enumerate([10.0, 12.0, 4000.0]):
+        write_run(tmp_path, "ug_mtm", "minigrid", "distance_max", seed,
+                  rd=value)
+    median, (down, up) = cell(tmp_path, "ug_mtm", "minigrid", "distance_max",
+                              "rd")
+    assert median == pytest.approx(12.0)
+    assert down == pytest.approx(2.0)
+    assert up == pytest.approx(3988.0)
 
 
 def test_cell_is_empty_when_the_key_is_null(tmp_path):

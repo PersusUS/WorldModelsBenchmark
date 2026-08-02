@@ -16,6 +16,9 @@ from experiments.export_tables import (
     fmt,
     method_table,
     predictor_table,
+    protocol_table,
+    task_label,
+    tasks_table,
 )
 
 PROTOCOL = {"n_train": 5000, "n_collect": 20, "batch_size": 8, "seq_len": 5,
@@ -113,3 +116,63 @@ def test_method_table_leaves_an_absent_cell_empty():
     table = method_table(runs, ["finetuning", "ewc"], ["minigrid"],
                          ["distance_min"], "rd")
     assert "--" in table
+
+
+def test_protocol_table_reports_the_budget_the_runs_carry():
+    """Table 1 comes from the results, not from the config: the previous
+    version of this paper described a budget it had never executed."""
+    table = protocol_table([run("finetuning", "minigrid", "distance_min", 0,
+                                rd=10.0)])
+    assert "5000" in table
+    assert "Seeds & 5 (0, 1, 2, 3, 4)" in table
+
+
+def test_protocol_table_refuses_to_describe_two_budgets_at_once():
+    other = dict(PROTOCOL, n_train=1000)
+    runs = [run("finetuning", "minigrid", "distance_min", 0, rd=10.0),
+            run("finetuning", "minigrid", "distance_med", 0, rd=10.0)]
+    runs[1]["protocol"] = other
+    with pytest.raises(ValueError, match="different protocols"):
+        protocol_table(runs)
+
+
+def test_task_label_drops_a_scale_of_one_and_keeps_gravity():
+    assert task_label({"env_id": "HalfCheetah-v4",
+                       "params": {"gravity": 4.0, "mass_scale": 1.0}}) == (
+        r"\texttt{HalfCheetah-v4} ($g=4$)")
+    assert task_label({"domain_name": "cheetah", "task_name": "run",
+                       "params": {}}) == r"\texttt{cheetah/run}"
+
+
+def test_d_param_is_left_empty_where_differencing_physics_would_lie():
+    """cheetah -> walker changes everything and leaves the physics vector at
+    its default, so Eq. 8 would score the largest change in the family as a
+    zero. That gap is the reason d_trans exists."""
+    from experiments.export_tables import d_param_of
+
+    swap = {"task_A": {"domain_name": "cheetah", "task_name": "run",
+                       "params": {}},
+            "task_B": {"domain_name": "walker", "task_name": "run",
+                       "params": {}}}
+    assert np.isnan(d_param_of(swap))
+
+    physics = {"task_A": {"env_id": "HalfCheetah-v4",
+                          "params": {"gravity": 9.8, "mass_scale": 1.0,
+                                     "friction_scale": 1.0}},
+               "task_B": {"env_id": "HalfCheetah-v4",
+                          "params": {"gravity": 4.0, "mass_scale": 1.0,
+                                     "friction_scale": 1.0}}}
+    assert d_param_of(physics) == pytest.approx(0.5858, abs=1e-4)
+
+
+def test_tasks_table_refuses_a_cell_that_mixes_environments():
+    """The failure this catches is F26: a level was edited, and half a cell's
+    seeds came from the environment pair it used to name."""
+    pair = {"task_A": {"domain_name": "cheetah", "task_name": "run"},
+            "task_B": {"domain_name": "walker", "task_name": "run"}}
+    stale = {"task_A": pair["task_A"],
+             "task_B": {"domain_name": "walker", "task_name": "stand"}}
+    runs = [run("finetuning", "dmcontrol", "distance_max", 0, tasks=pair),
+            run("finetuning", "dmcontrol", "distance_max", 1, tasks=stale)]
+    with pytest.raises(ValueError, match="different task pairs"):
+        tasks_table(runs, ["dmcontrol"], ["distance_max"])

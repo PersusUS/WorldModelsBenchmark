@@ -1,0 +1,304 @@
+% Method section.
+%
+% Same rule as results.tex: every number here is quoted from a generated
+% table, and the two tables this section owns -- the protocol and the task
+% grid -- are read out of the stored metrics.json files rather than out of the
+% configs, because the configs have been edited and the results have not.
+% Regenerate with:
+%
+%     cd cf_worldmodels && python experiments/export_tables.py
+%
+% Requires booktabs.
+
+\section{The benchmark}
+\label{sec:method}
+
+\subsection{What is being measured, and in which component}
+\label{sec:method:setup}
+
+A world model factorises into three learned parts: an encoder $E$ that maps an
+observation $o_t$ to a latent $z_t$, a transition component $M$ that carries
+$(z_t, a_t)$ forward in time, and a decoder $D$ that maps latents back to
+pixels. Continual-learning results for model-based agents are almost always
+reported at the level of the agent --- returns, or success rates, after a task
+switch --- which confounds the three parts with each other and with the policy
+trained on top of them. This benchmark measures $M$.
+
+We use the recurrent state-space model of \citet{hafner2019planet} as the common
+substrate, in the configuration of \citet{hafner2020dreamer}, with a
+convolutional VAE encoder--decoder \citep{ha2018worldmodels}. Observations are
+rendered to $64 \times 64$ RGB and scaled to $[0,1]$ in all three families, so
+the same architecture spans them. The deterministic state is carried by a
+GRU cell,
+%
+\begin{equation}
+  h_t = \mathrm{GRU}\big([z_{t-1}, a_{t-1}], h_{t-1}\big),
+  \qquad
+  z_t \sim \mathcal{N}\big(\mu_\theta(h_t), \operatorname{diag}
+  \sigma^2_\theta(h_t)\big),
+  \label{eq:rssm}
+\end{equation}
+%
+and $M = (\mathrm{GRU}, \mu_\theta, \sigma_\theta)$ is the object the forgetting
+metrics score. The model is trained on reward-free rollouts from a random
+policy, so nothing in the pipeline depends on a task's reward function --- a
+property that matters more than it sounds, and Section~\ref{sec:method:families}
+returns to it.
+
+A run trains one model on a sequence of tasks $T_1 \ldots T_k$, and measures on
+$T_1$ what training on the rest cost. All experiments here use $k = 2$: we write
+task~A and task~B, and every metric is an A-versus-A comparison of the model
+before and after training on B. Each task contributes held-out episodes that are
+never trained on, and the evaluation sets are built from those.
+
+\subsection{Three metrics, and what each one can see}
+\label{sec:method:metrics}
+
+Write $M_A$ for the model after task~A and $M_B$ for the same model after task~B.
+
+\paragraph{Prediction fidelity (PF).} The evaluation set $D_A$ is a set of
+latent transition triples $(z, a, z')$ drawn from held-out task-A episodes. PF
+is the one-step negative log-likelihood the later model assigns to them, minus
+the earlier model's:
+%
+\begin{equation}
+  \mathrm{PF} = \mathrm{NLL}(M_B, D_A) - \mathrm{NLL}(M_A, D_A),
+  \qquad
+  \mathrm{NLL}(M, D) = -\,\mathbb{E}_{(z,a,z') \sim D}
+  \big[\log P_\theta(z' \mid z, a)\big].
+  \label{eq:pf}
+\end{equation}
+%
+Positive PF means the transition component got worse at task~A. The target is
+$z'$, the \emph{next} latent: scoring against $z$ would measure how far the
+transition moves the state rather than how well it predicts it.
+
+\paragraph{Rollout divergence (RD).} PF is a one-step quantity, and a
+transition model can be locally accurate while compounding error over a horizon.
+RD imagines forward from held-out task-A start states under both models, driven
+by the same actions, and averages the per-step divergence between their
+predicted state distributions:
+%
+\begin{equation}
+  \mathrm{RD} = \frac{1}{H} \sum_{t=1}^{H}
+  \mathbb{E}\Big[
+  D_{\mathrm{KL}}\big(P_{A}(z_t \mid h^A_{t}) \,\big\|\,
+  P_{B}(z_t \mid h^B_{t})\big)\Big].
+  \label{eq:rd}
+\end{equation}
+%
+Each model propagates its own predicted mean, so the two rollouts are allowed to
+separate; the actions at each step are resampled from the evaluation set's own
+action distribution rather than from a Gaussian, which would be off-manifold for
+bounded continuous actions and meaningless for one-hot discrete ones. RD is a KL
+and is therefore unbounded above, which is a property of the metric that
+Section~\ref{sec:results:reporting} has to handle rather than an artefact.
+
+\paragraph{Forward transfer (FT).} Forgetting is only half of a continual
+learning result. FT asks what having seen task~A did for learning task~B, against
+the counterfactual of a model that trained on B alone under the same budget and
+the same data:
+%
+\begin{equation}
+  \mathrm{FT} = \mathcal{L}^{\mathrm{px}}_{B}\big(\text{trained on B from
+  scratch}\big) - \mathcal{L}^{\mathrm{px}}_{B}\big(\text{pretrained on
+  A}\big),
+  \label{eq:ft}
+\end{equation}
+%
+where $\mathcal{L}^{\mathrm{px}}_{B}$ is held-out reconstruction error on task~B
+in pixel space. Positive FT means knowledge of A helped. It is measured in
+pixels, not in latent NLL, and the reason is not cosmetic: the two models were
+trained independently, so their latent spaces are unrelated bases and a latent
+likelihood would score one model in coordinates belonging to the other. Pixels
+are the one scale the two arms share. One caveat travels with the number:
+replay's pretrained arm trains on A and B together during phase~B, so it spends
+half its updates on task-A data, and its FT mixes transfer with a halved
+effective budget on B.
+
+\paragraph{Declared scope.} $D_A$ is encoded once, by $M_A$, and both models are
+scored on those fixed latents. This is what isolates $M$: letting each model
+encode with its own drifting VAE would compare every model against its own
+moving coordinates rather than against a common evaluation set. The cost is that
+PF and RD cannot see drift in the encoder at all, and
+Section~\ref{sec:results:encoder} shows that the blind spot is where most of the
+forgetting happens. We therefore report, for every run, the held-out task-A
+reconstruction error in pixels alongside PF and RD. A second and smaller
+restriction: the transitions in $D_A$ are scored from a zero initial hidden
+state, so PF measures the one-step map and not the recurrent carry.
+
+\paragraph{On aggregation, and on a metric we withdrew.} An earlier version of
+this benchmark combined PF, RD and a policy impact score into a single scalar.
+We report PF and RD separately (Section~\ref{sec:results:reporting} gives the
+measured reason), and we withdraw the policy impact score: scoring a policy
+trained inside the model's imagination requires a controller this benchmark does
+not build, and reporting an unimplemented term as a zero is worse than not
+announcing it. The suite is PF, RD and FT.
+
+\subsection{Two ways to measure the distance between two environments}
+\label{sec:method:distances}
+
+The design varies the distance between task~A and task~B, so that distance has
+to be quantified rather than asserted. Two instruments are available and they
+are not interchangeable.
+
+The \emph{parametric} distance differences the physics vector
+$\phi = [\,\text{gravity}, \text{mass scale}, \text{friction scale}\,]$ directly,
+%
+\begin{equation}
+  d_{\mathrm{param}} = \frac{\lVert \phi_A - \phi_B \rVert_2}
+  {\lVert \phi_A \rVert_2},
+  \label{eq:dparam}
+\end{equation}
+%
+and is exact where it applies. It applies to four of our nine cells. It is
+undefined for a change of layout or of body: the pairs that swap cheetah for
+walker leave $\phi$ at its default in both tasks, so
+Equation~\ref{eq:dparam} would score the largest construction change in that
+family as no change at all.
+
+The \emph{transition} distance is defined wherever transitions can be sampled.
+It trains one plain RSSM per environment, from scratch, and takes the expected
+divergence between their one-step predictions on shared held-out task-A
+transitions:
+%
+\begin{equation}
+  d_{\mathrm{trans}} = \mathbb{E}_{(z,a) \sim D_A}
+  \Big[ D_{\mathrm{KL}}\big(P_A(z' \mid z, a) \,\big\|\, P_B(z' \mid z, a)\big)
+  \Big].
+  \label{eq:dtrans}
+\end{equation}
+%
+It is a property of the task pair and the seed, not of the continual learning
+method, so it is computed once per cell and seed and all five methods read the
+same value back. The two reference models it needs are the same two that supply
+the from-scratch arm of Equation~\ref{eq:ft}, which is why measuring both cost
+one pair of extra trainings per cell and seed rather than two: 45 pairs against
+the grid's 225 runs, a 20\% surcharge.
+
+Equation~\ref{eq:dtrans} carries a caveat we have not resolved, and it is the
+same one that keeps FT in pixel space. The two reference models are trained
+independently, so $P_B$ is evaluated on latents produced by $A$'s encoder --- a
+basis it has never seen. Part of what
+$d_{\mathrm{trans}}$ measures is therefore basis mismatch rather than
+dynamics mismatch, and its absolute magnitudes are not comparable across
+families for that reason (Table~\ref{tab:tasks} puts MiniGrid near $20$ and
+DMControl near $5$). We use it only to rank cells within a family and to rank
+the nine cells against each other, and Section~\ref{sec:results:predictors}
+reports where that ranking holds and where it fails.
+
+\subsection{Environment families and distance levels}
+\label{sec:method:families}
+
+\begin{table}[t]
+  \centering
+  \small
+  \input{tables/tab_tasks}
+  \caption{The nine cells, read from the stored results rather than from the
+  configuration files. $d_{\mathrm{param}}$ is left empty where differencing a
+  physics vector would misdescribe the pair (Section~\ref{sec:method:distances});
+  $d_{\mathrm{trans}}$ is the median over five seeds and is comparable within a
+  family, not across families.}
+  \label{tab:tasks}
+\end{table}
+
+Three families cover three regimes an $M$ has to cope with, and
+Table~\ref{tab:tasks} lists the pairs. \textbf{MiniGrid}
+\citep{chevalierboisvert2023minigrid} is discrete: seven one-hot actions, and
+levels built by changing the layout, from a larger empty room to four rooms to a
+keyed corridor. \textbf{Gymnasium} is continuous control with variable physics:
+six actuators on MuJoCo's HalfCheetah \citep{todorov2012mujoco}, with the three
+levels applying progressively stronger perturbations to the same body.
+\textbf{DMControl} \citep{tunyasuvunakool2020dmcontrol} is the visually hardest
+of the three, and its levels mix a change of body with the same physical
+perturbation Gymnasium's maximum level applies.
+
+Gymnasium's three levels are nested by construction, and this turns out to carry
+more weight than the rest of the design: both the medium and maximum levels move
+gravity from $9.8$ to $4.0$, and the maximum additionally scales mass and
+friction. It is strictly the medium perturbation plus more perturbation, applied
+to the same task pair. Any claim that the axis orders something monotone can be
+checked against those two cells alone, with no appeal to how families compare.
+
+Two constraints shaped the levels and are worth stating because they are easy to
+trip over. One world model spans both tasks of a pair, so its GRU has a single
+action width and the two tasks must have the same number of actuators --- which
+in dm\_control leaves only cheetah and walker. And because the model is trained
+on reward-free rollouts, two dm\_control tasks from the same domain are the
+\emph{same environment} as far as this benchmark can see: they share physics and
+initial-state distribution and differ only in a reward function nothing here
+consumes. A level built as \texttt{walker/run} against \texttt{walker/stand}
+produces a bit-identical copy of its neighbour, which is how we built one before
+we caught it.
+
+\subsection{Methods evaluated}
+\label{sec:method:methods}
+
+Five methods, spanning the three standard families of mitigation plus two
+bounds.
+
+\begin{itemize}
+  \item \textbf{Fine-tuning} --- sequential training with no protection. The
+  lower bound.
+  \item \textbf{Infinite replay} --- an unbounded buffer of every past task,
+  sampled uniformly during phase~B. The approximate upper bound, and the only
+  method here that sees task-A data while learning task~B.
+  \item \textbf{EWC} \citep{kirkpatrick2017ewc} --- a diagonal-Fisher quadratic
+  penalty around the post-task-A weights, $\lambda = 1000$. The Fisher is
+  estimated from per-sample gradients of $\log P_\theta(z' \mid z, a)$.
+  \item \textbf{Progressive networks} \citep{rusu2016progressive} --- one GRU
+  column per task, previous columns frozen, lateral projections from the last
+  frozen column into the new one.
+  \item \textbf{UG-MTM} --- our own method: the deterministic transition is
+  replaced by a pool of four GRU experts \citep{shazeer2017moe} gated by an
+  MC-dropout estimate of epistemic uncertainty \citep{gal2016dropout}, and the
+  VAE is frozen after task~A. It is included as one of five methods, not as the
+  paper's result.
+\end{itemize}
+
+Two properties of EWC's penalty follow from its definition and are worth naming
+before the results rather than after. Its Fisher is defined over
+$\log P_\theta(z' \mid z, a)$, which contains no encoder parameter, so it is
+\emph{exactly} zero on all twenty VAE tensors: the penalty cannot constrain the
+encoder even in principle. It is likewise zero on the GRU's hidden-to-hidden
+weights, because the transitions the Fisher is estimated from all start from
+$h = 0$. Both zeros are pinned by tests, and
+Section~\ref{sec:results:encoder} measures what the first one costs.
+
+\subsection{Protocol}
+\label{sec:method:protocol}
+
+\begin{table}[t]
+  \centering
+  \input{tables/tab_protocol}
+  \caption{The executed protocol. Generated from the \texttt{protocol} block
+  that every result file stores, not transcribed from the configuration.}
+  \label{tab:protocol}
+\end{table}
+
+Table~\ref{tab:protocol} gives the budget. Per cell and seed: collect episodes
+from task~A under a random policy, train, snapshot, collect from task~B, train
+again, and evaluate. Rollout collection is shared across the five methods and
+the reference pair of that cell and seed, so all six see identical data.
+
+The protocol is declared in the configuration, and every result file records the
+block it was produced under. The runner reads all of it and hardcodes none of
+it; it skips cells it has already computed, and \emph{refuses} cells produced
+under a different protocol or on a different task pair, so two budgets can never
+be averaged into one table cell. Table~\ref{tab:protocol} is generated from
+those stored blocks rather than from the configuration for the same reason: a
+protocol table transcribed by hand describes an intention, and what a benchmark
+owes its readers is a description of what ran.
+
+Runs are reproducible from their seed. Seeding covers the global RNGs, cuDNN,
+and --- the part that is easy to miss --- each environment's own generator,
+including Gymnasium's action space and dm\_control's \texttt{RandomState};
+without those the five seeds of a cell train on five different datasets and are
+not replicates. Instrumentation is wrapped so that measuring cannot change a
+result, which is load-bearing here because UG-MTM's gate keeps MC-dropout active
+at evaluation time by design and so consumes the random stream. We reproduced a
+cell bit for bit eight days after it first ran.
+
+Each family runs in its own process. This is not tidiness: dm\_control cannot
+obtain an OpenGL context in a process where MuJoCo already holds one, and a
+30-hour run died at exactly that boundary before the runner was split.

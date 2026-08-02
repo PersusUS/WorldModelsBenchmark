@@ -418,6 +418,16 @@ def print_distance_axis_section(runs, axis_methods, families, distances,
         difficulty.append(axis_value(runs, axis_methods, family, distance,
                                      "heldout_reconstruction_B_after_task_B"))
 
+    # The same nine rows the correlations are computed from. Printed because a
+    # correlation over nine points is a summary of a table small enough to
+    # read, and the reader should be able to check it against the ranks.
+    print(f"  {'cell':<26}{key:>10}{'d_trans':>12}{'recon B|after B':>18}")
+    for (family, distance), obs, dt, diff in zip(cells, observed, d_trans,
+                                                 difficulty):
+        cell_name = f"{family}/{distance.split('_')[1]}"
+        print(f"  {cell_name:<26}{obs:>10.2f}{dt:>12.2f}{diff:>18.2f}")
+    print()
+
     print(f"Rank correlation (Spearman) with {key}, over the "
           f"{len(cells)} cells:")
     for name, predictor in (("labelled level (min<med<max)", labels),
@@ -525,9 +535,13 @@ def print_comparison(runs, method_a, method_b, families, distances, keys):
                     printed_header = True
                 diffs = a - b
                 wins = int(np.sum(diffs > 0))
-                print(f"  {key:<6} {method_a}={np.mean(a):+8.3f}  "
-                      f"{method_b}={np.mean(b):+8.3f}  "
-                      f"delta={np.mean(diffs):+8.3f}  "
+                # The two cell values are medians, to agree with the tables
+                # (D15). `delta` is the mean paired difference, because that is
+                # the statistic the permutation test and d_z are computed on -
+                # it is not the difference of the two medians printed beside it.
+                print(f"  {key:<6} {method_a}={np.median(a):+8.3f}  "
+                      f"{method_b}={np.median(b):+8.3f}  "
+                      f"mean delta={np.mean(diffs):+8.3f}  "
                       f"higher in {wins}/{len(seeds)}  "
                       f"perm p={permutation_p(diffs):.4f}  "
                       f"d_z={effect_size(diffs):+.2f}")

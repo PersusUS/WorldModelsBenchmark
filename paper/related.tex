@@ -1,0 +1,137 @@
+% Background and related work.
+%
+% Carried over from the previous version and updated in two places: the gap
+% argument survives unchanged, but the paper's claim is now a finding rather
+% than the suite, so §2.4 and §2.5 situate the two findings against the
+% practices they amend. Every entry cited here is in refs.bib.
+
+\section{Background and related work}
+\label{sec:related}
+
+\subsection{World models and the RSSM}
+\label{sec:related:worldmodels}
+
+A world model is an agent's internal, learned model of environment dynamics.
+In the formulation of \citet{ha2018worldmodels} it comprises a visual encoder,
+a transition model $M$, and a controller trained inside the model's
+imagination. The recurrent state-space model \citep{hafner2019planet} gives $M$
+the form used throughout this paper --- a deterministic recurrent state carried
+by a GRU, and a stochastic latent sampled from it --- and the Dreamer line of
+work \citep{hafner2020dreamer, hafner2021dreamerv2, hafner2023dreamerv3} builds
+agents on top of it.
+
+The relevance of $M$ to continual learning is specific: a transition model that
+has forgotten a previous environment's dynamics produces incoherent imagined
+rollouts for that environment \emph{regardless of how good the policy is}, and
+any controller subsequently trained in that imagination inherits the corruption.
+\citet{ha2018worldmodels} name catastrophic forgetting as an open problem for
+world models and leave it to future work. Later systems mitigate it
+incidentally: DreamerV3 \citep{hafner2023dreamerv3} trains from large replay
+buffers, which mixes experience across whatever the agent has seen, but this is
+a property of the data pipeline rather than a treatment of the transition
+component, and it says nothing about what happens to $M$ when the mixing is
+removed.
+
+\subsection{Catastrophic forgetting and the three families of mitigation}
+\label{sec:related:forgetting}
+
+Catastrophic forgetting \citep{mccloskey1989catastrophic, ratcliff1990connectionist,
+french1999catastrophic} follows from the distributed, overlapping nature of
+neural representations: gradient steps that reduce loss on a new task move
+shared parameters away from optima for previous ones. The stability--plasticity
+dilemma \citep{vandeven2024continual} states the tension that any mitigation has
+to price --- what reduces forgetting tends to reduce the capacity to learn what
+comes next.
+
+Mitigations fall into three families, and we evaluate one representative of
+each. \emph{Regularization} methods add a penalty that discourages movement in
+parameters deemed important for previous tasks, weighted by an importance
+estimate: a diagonal Fisher in EWC \citep{kirkpatrick2017ewc}, a path integral
+in synaptic intelligence \citep{zenke2017si}. \emph{Architectural} methods
+allocate separate capacity per task, whether by growing it
+\citep{rusu2016progressive} or by carving it out of a fixed network
+\citep{mallya2018packnet}. \emph{Replay} methods retain and re-sample data from
+previous tasks.
+
+All three were developed and are predominantly evaluated in classification, or
+on end-to-end reinforcement learning agents. That matters here for a reason that
+is not merely about coverage: an importance estimate is defined relative to a
+loss, and therefore has support only where that loss has gradients. When such a
+method is applied to a world model, which loss it is attached to decides which
+components it can protect at all --- a point Section~\ref{sec:results:encoder}
+turns into a measurement rather than an argument.
+
+\subsection{What existing continual learning benchmarks measure}
+\label{sec:related:benchmarks}
+
+The classification suites --- Split-MNIST, Permuted-MNIST, Split-CIFAR --- measure
+forgetting in discriminative models with no temporal structure, and do not
+transfer to a generative model of dynamics.
+
+Within reinforcement learning, Continual World
+\citep{wolczyk2021continualworld} is the standard benchmark: sequences of
+robotic manipulation tasks with actor-critic agents, reporting forgetting,
+forward transfer and performance at the level of the \emph{policy}. Closest to
+our setting, \citet{kessler2023effectiveness} study world models in continual
+reinforcement learning directly, evaluating DreamerV2 as an integrated system
+and finding that reservoir sampling in the replay buffer is the most effective
+mitigation, again measured by policy-level return, forgetting and transfer.
+
+Both measure the agent. Neither isolates $M$, and neither defines a metric for
+the quality of imagined dynamics as such. We are not aware of a benchmark that
+does, and that gap is what the suite in Section~\ref{sec:method} is built to
+fill. The distinction is not bookkeeping: a system-level result cannot say
+whether a mitigation preserved the dynamics or merely preserved a policy that
+was robust to their degradation, and those two call for different fixes.
+
+Component-level measurement also sharpens a comparison we can now make.
+\citet{kessler2023effectiveness} report that L2 regularization on the full
+DreamerV2 system performs poorly. We find that EWC restricted to the transition
+component preserves it almost exactly (Section~\ref{sec:results:encoder}) while
+leaving everything else unprotected --- and, because its Fisher is identically
+zero outside the transition loss, this is structural rather than a matter of
+tuning. Read together, the two results suggest that the disappointing behaviour
+of regularization in world models is less about the penalty than about the
+mismatch between where its importance signal has support and where the
+forgetting actually happens.
+
+\subsection{Task distance as an experimental factor}
+\label{sec:related:distance}
+
+Continual learning results are routinely reported against a notion of how
+related the tasks in a sequence are, and benchmarks are built to span that
+notion: sequences are assembled from tasks judged similar or dissimilar, and the
+resulting ordering is then treated as an experimental factor against which
+forgetting is expected to grow. Our own design does exactly this, with three
+levels of dynamic distance per family
+(Section~\ref{sec:method:families}), and the previous version of this work
+described them as controlled.
+
+What is usually missing --- and was missing from our own design --- is a
+\emph{measured} quantity to which the ordering is answerable. Where the
+environments differ in explicit physical parameters, differencing them is
+available and exact (Equation~\ref{eq:dparam}); where they differ in body or
+layout, there is nothing to difference, and the ordering rests on judgement.
+Section~\ref{sec:results:axis} reports what happened when we checked ours
+against both the forgetting it produced and a measured distance between the
+environments' transition models, and Section~\ref{sec:discussion:axis} states
+the recommendation that follows. The recommendation is aimed at this practice
+rather than at any particular benchmark.
+
+\subsection{Where forgetting is measured inside a model}
+\label{sec:related:locus}
+
+A metric for a multi-component model has to hold something fixed in order to
+attribute a change to anything, and what it holds fixed bounds what it can
+detect. Metrics defined over a representation --- ours included, since PF and RD
+score the transition component in a latent basis encoded once
+(Section~\ref{sec:method:metrics}) --- are by construction unable to observe
+drift in the mapping that produced that basis. This is the price of component
+isolation, not a defect of a particular estimator, and the same trade appears
+wherever forgetting is attributed to a part of a network rather than to the
+whole.
+
+The consequence is that a component-level benchmark owes its readers both
+scales. Reporting only the isolated metric can certify that a method preserved
+the component it was pointed at while the model as a whole became unusable for
+the old task. Section~\ref{sec:results:encoder} is that situation, measured.

@@ -89,6 +89,7 @@ def draw(results_root, out_dir, stem):
 
         for row, (key, metric_label) in enumerate(METRICS):
             ax = axes[row][col]
+            means_seen = []
             for i, (method, label) in enumerate(zip(METHODS, LABELS)):
                 means, stds, xs = [], [], []
                 for x, distance in zip(xvals, DISTANCES):
@@ -99,6 +100,7 @@ def draw(results_root, out_dir, stem):
                         xs.append(x)
                 if not means:
                     continue
+                means_seen.extend(means)
                 ax.errorbar(
                     xs, means, yerr=stds, label=label,
                     color=COLORS[i], linestyle=LINES[i], marker=MARKERS[i],
@@ -106,23 +108,41 @@ def draw(results_root, out_dir, stem):
                     zorder=5 if method == "ug_mtm" else 2,
                 )
 
-            # Zero is the no-forgetting line for both metrics, and PF goes
-            # negative often enough that it has to be visible.
-            ax.axhline(0, color="gray", linewidth=0.8, linestyle=":", alpha=0.6)
+            # Zero is the no-forgetting line, and PF goes negative often
+            # enough that it has to be visible. RD is a KL and cannot be
+            # negative, so the line only means something on the PF row.
+            if key != "rd":
+                ax.axhline(0, color="gray", linewidth=0.8, linestyle=":",
+                           alpha=0.6)
             if row == 0:
                 ax.set_title(fam_label, fontsize=13, fontweight="bold", pad=8)
             ax.set_xlabel(xlabel, fontsize=10)
             ax.set_ylabel(metric_label if col == 0 else "", fontsize=10)
             ax.set_xticks(xvals)
-            ax.set_xticklabels(xticklabels, fontsize=9)
+            # Two levels can land on the same measured distance -- dmcontrol's
+            # med and max do -- and overlapping labels look like a plotting
+            # bug rather than the result it is.
+            ax.set_xticklabels(xticklabels, fontsize=9, rotation=30,
+                               ha="right")
             ax.grid(True, alpha=0.25, linestyle="--")
             ax.tick_params(labelsize=9)
-            # Independent Y axis per panel: PF and RD differ by an order of
-            # magnitude, which is the whole reason they are not aggregated.
-            ax.autoscale(axis="y")
-            ymin, ymax = ax.get_ylim()
-            pad = (ymax - ymin) * 0.15
-            ax.set_ylim(ymin - pad, ymax + pad)
+
+            if key == "rd" and means_seen and min(means_seen) > 0 and \
+                    max(means_seen) / min(means_seen) > 50:
+                # RD is a KL, so it is non-negative, and it spans three orders
+                # of magnitude once UG-MTM's outlier cell is in (F23). On a
+                # linear axis that one point flattens every other method to
+                # the zero line.
+                ax.set_yscale("log")
+                ax.set_ylabel(f"{metric_label} (log)" if col == 0 else "",
+                              fontsize=10)
+            else:
+                # Independent Y axis per panel: PF and RD differ by an order of
+                # magnitude, which is the whole reason they are not aggregated.
+                ax.autoscale(axis="y")
+                ymin, ymax = ax.get_ylim()
+                pad = (ymax - ymin) * 0.15
+                ax.set_ylim(ymin - pad, ymax + pad)
 
     handles, legend_labels = axes[0][0].get_legend_handles_labels()
     if handles:

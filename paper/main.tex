@@ -1,0 +1,41 @@
+% WMF Benchmark -- paper root.
+%
+% Compile with:  pdflatex main && bibtex main && pdflatex main && pdflatex main
+%
+% Section files are plain \section blocks with no preamble of their own, so
+% they can be reordered here without editing them. Everything under tables/ is
+% generated -- see experiments/export_tables.py -- and must not be edited by
+% hand. There is no LaTeX toolchain on the machine this was written on;
+% _devlog/check-paper.py checks the structure that a compiler would catch.
+
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}      % required by every generated table
+\usepackage{graphicx}
+\usepackage[numbers]{natbib}
+\usepackage[hidelinks]{hyperref}
+
+\title{Forgetting in World Models Does Not Follow Task Distance:\\
+       \large A Component-Level Benchmark and Two Negative Results}
+\author{Jes\'us P\'erez Bazarot\\ Independent Research}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\input{abstract}
+\input{intro}
+\input{related}
+\input{method}
+\input{results}
+\input{discussion}
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}

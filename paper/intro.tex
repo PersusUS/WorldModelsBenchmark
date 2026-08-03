@@ -1,0 +1,101 @@
+% Introduction.
+%
+% Order follows D19: the findings first, the suite third. The previous version
+% led with the suite and with a method, and promised four metrics where three
+% exist. Numbers here are quoted from the tables in Section 5.
+
+\section{Introduction}
+\label{sec:intro}
+
+A world model is an agent's learned model of how its environment evolves. In
+the decomposition of \citet{ha2018worldmodels} it has an encoder that maps
+observations to latent states, a transition component $M$ that carries those
+states forward under actions, and a controller trained inside the resulting
+imagination. An agent that meets a sequence of environments must keep updating
+$M$, and each update risks overwriting what $M$ knew about the environments
+before --- catastrophic forgetting, at the component that every downstream use
+of the model depends on. A transition model that has forgotten an environment's
+dynamics generates incoherent rollouts for it no matter how good the policy is.
+
+\citet{ha2018worldmodels} name this as an open problem and leave it to future
+work. Since then it has been studied at the level of the agent: Continual World
+\citep{wolczyk2021continualworld} measures forgetting in manipulation policies,
+and \citet{kessler2023effectiveness} evaluate DreamerV2 as an integrated system
+and report policy-level return, forgetting and transfer. Both measure what the
+agent does. Neither isolates $M$, and we are not aware of a benchmark that
+does. The distinction is not bookkeeping: a system-level result cannot say
+whether a mitigation preserved the dynamics or preserved a policy robust to
+their degradation, and those two ask for different fixes.
+
+So we built the missing instrument --- three environment families, three levels
+of dynamic distance each, five continual learning methods, five seeds, 225 runs
+plus 45 from-scratch reference pairs --- and this paper is mostly about what it
+told us that we had not asked. Both findings are negative, and neither is about
+which method wins.
+
+\paragraph{The distance axis does not order forgetting.} The benchmark, like
+most in this literature, is built around an ordinal notion of how far apart two
+tasks are, with the expectation that forgetting grows along it. It does not.
+Forgetting peaks at the \emph{medium} level in all three families, so the
+labelled order is wrong in every one of them. Across the nine cells the label
+is uninformative ($\rho = 0.05$) while the difficulty of the new task predicts
+forgetting far better ($\rho = 0.58$), which is why we read the result as
+forgetting scaling with what the new task demands of the model rather than with
+its distance from the old one.
+
+The cleanest evidence needs no comparison across families. In Gymnasium the
+maximum level is the medium perturbation plus two further ones, applied to the
+same task pair; a strict superset of a perturbation cannot produce less
+forgetting if the axis orders anything monotone, and it does. We rechecked that
+cell at twice the training budget, because the obvious objection is that the
+model simply never fits the harder task. The ordering holds, and the objection
+turns out to be backwards: the more heavily perturbed task is \emph{easier} to
+fit, since a cheetah at triple mass and $40\%$ gravity barely moves and
+generates correspondingly little to learn. The strongest perturbation in that
+family produces the poorest task, and the least forgetting.
+
+\paragraph{The forgetting is in the encoder, where the metrics do not look.}
+Component-level metrics have to hold a representation fixed in order to
+attribute a change to the component, and ours do: prediction fidelity and
+rollout divergence score $M$ in a latent basis encoded once. That is the
+isolation we wanted, and it has a cost we can now measure. Fine-tuning's
+held-out reconstruction of the first task degrades by a factor of $745$ while
+its prediction fidelity reads $-6.21$ --- in the frozen basis, the model
+\emph{improved}. EWC makes the dissociation exact and predicts it from its own
+definition: its Fisher information is taken over $\log P(z' \mid z, a)$, which
+contains no encoder parameter, so it is identically zero there. It preserves
+the transition component almost perfectly ($-0.07$) while its encoder degrades
+by $753$. A benchmark reporting only PF and RD would certify that neither model
+forgot anything.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+  \item \textbf{A negative result about how these experiments are designed.}
+  Level labels do not index forgetting, in any of three families, under any
+  aggregation we tried and at two training budgets. We recommend reporting a
+  measured distance per task pair and holding it to account --- a standard our
+  own measured distance fails, which we report rather than omit.
+  \item \textbf{A negative result about how they are read.} Forgetting in a
+  world model concentrates in the component that isolated metrics are blind to,
+  and the most widely used regularizer cannot reach it for a structural reason
+  that is checkable in advance. Component-level benchmarks owe their readers
+  both scales.
+  \item \textbf{The benchmark that produced them.} A component-level suite for
+  forgetting in $M$: three metrics (prediction fidelity, rollout divergence,
+  forward transfer), a measured distance between environments, three families,
+  and a protocol that is declared in configuration, recorded in every result
+  file, and refused by the runner if two budgets would meet in one cell. Five
+  methods are characterised, not ranked.
+\end{enumerate}
+
+\paragraph{What this paper does not claim.} It does not claim that our own
+method wins; it is one of the five, and the benchmark's clearest finding about
+it is a failure mode (Section~\ref{sec:results:methods}). It does not report a
+single aggregate score, because the one we started from is $78$--$97\%$ rollout
+divergence by weight. It does not report a policy-impact metric, which an
+earlier version of this work announced and never implemented. And it supersedes
+that version entirely: none of its five findings survive re-measurement, for
+five instrumentation defects we document in Section~\ref{sec:discussion:previous},
+including one that reverses. That history is part of the argument rather than
+an embarrassment attached to it --- a benchmark's claim on anyone's attention is
+that its numbers can be checked, and these were.

@@ -1,0 +1,47 @@
+% Abstract.
+%
+% Every number here appears in a generated table under tables/. Two things this
+% must not do, both decided and both mistakes the previous version made:
+% promise a policy-impact metric (withdrawn, D18) or a single aggregate score
+% (PF and RD are reported separately, D10). A third, learned from R18: do not
+% sell d_trans -- the amendment is "report a measured distance", not "use ours".
+
+\begin{abstract}
+World models learn the dynamics of an environment so an agent can plan inside
+them. When such a model is trained on one environment and then another, the
+transition component that carries latent state forward is overwritten, and no
+benchmark measures that degradation at the level of the component itself:
+existing continual learning suites evaluate policies, or world models as
+integrated systems. We build one --- three environment families, three levels
+of dynamic distance each, five continual learning methods, five seeds, 225 runs
+with 45 from-scratch reference pairs --- and report what it says about the way
+this kind of experiment is usually designed and read.
+
+Two results, both negative, and neither about which method wins. First, the
+distance axis we built the benchmark around does not order forgetting.
+Forgetting peaks at the \emph{medium} level in all three families, so the
+labelled order is wrong in every one of them (Spearman $\rho = 0.05$ against
+the labels; $0.58$ against how hard the new task is to fit). The cleanest case
+needs no cross-family comparison: one family's maximum level is its medium
+perturbation plus two more, applied to the same task pair, and it forgets
+\emph{less}. Rerunning that pair at twice the training budget preserves the
+ordering and refutes the obvious explanation --- the harder-perturbed task is
+\emph{easier} to fit, not harder, because a cheetah at triple mass barely
+moves. Forgetting tracked how much the new task demanded of the model, not how
+far it sat from the old one.
+
+Second, the forgetting happens almost entirely in the encoder, where
+component-level metrics --- including ours --- cannot see it. Fine-tuning's
+held-out reconstruction of the first task degrades by a factor of $745$ while
+its prediction fidelity reads $-6.21$, i.e.\ improvement. EWC makes the
+dissociation exact and predictable: its Fisher information is identically zero
+on every encoder parameter, so it preserves the transition component almost
+perfectly ($-0.07$) with an encoder degraded by $753$. A benchmark reporting
+only the isolated metric would certify that these models did not forget.
+
+We characterise five methods rather than ranking them, our own included, and
+recommend that continual learning suites report a measured distance for each
+task pair and hold it to account rather than treating level labels as an
+experimental factor --- a standard we also apply to our own measured distance,
+which fails it. Code, configurations and all 225 result files are released.
+\end{abstract}

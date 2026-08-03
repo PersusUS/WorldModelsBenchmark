@@ -71,9 +71,22 @@ families, because there the two upper levels are nested by construction. Both
 move HalfCheetah from gravity $9.8$ to $4.0$; the maximum level additionally
 scales mass by $3$ and friction by $0.5$. It is strictly the medium
 perturbation plus more perturbation, and it produces \emph{less} forgetting
-($59.59$ against $85.91$). The measured distance agrees with the outcome rather
-than with the construction: $d_{\mathrm{trans}}$ is $24.71$ at the maximum level
-against $30.86$ at the medium one.
+($59.59$ against $85.91$).
+
+The obvious objection is that this is a statement about our budget rather than
+about forgetting: if at the maximum level the model never fits task~B, nothing
+gets overwritten and the cell reads low for an uninteresting reason. We tested
+it by rerunning both cells at twice the training budget, and it does not hold
+up. The ordering survives --- restricted to fine-tuning, so that the two budgets
+are compared on the same estimator, the cells read $118.04$ (medium) against
+$58.79$ (maximum) at 5000 updates and $144.70$ against $102.18$ at 10000 --- and
+the mechanism the objection proposes is the opposite of what happens. Task~B is
+\emph{easier} to fit at the maximum level than at the medium one, at both
+budgets ($17.31$ against $27.10$, and $15.14$ against $24.65$): the heavier,
+lower-friction, low-gravity cheetah moves less, and a less varied task is a
+task with less to learn from. What we report as robust is the direction, which
+survives the doubling; the magnitude is budget-dependent, the ratio between the
+two cells falling from $2.01$ to $1.42$.
 
 The aggregate in Table~\ref{tab:axis} deliberately excludes UG-MTM. It freezes
 its encoder, which puts its RD two orders of magnitude below the other four
@@ -121,13 +134,28 @@ Two caveats belong with this. First, $n = 9$, with three families on very
 different scales, and a rank correlation over pooled cells is indicative rather
 than conclusive; the repeated peak of Section~\ref{sec:results:axis} is the
 robust half of the finding and the correlations are the interpretation of it.
-Second, $d_{\mathrm{trans}}$ is not a drop-in replacement for the labelled axis.
-It recovers the RD ordering in Gymnasium exactly and separates DMControl's
-minimum from the rest, but in MiniGrid it inverts min and med
-($20.07$ against $19.59$, well within the seed spread). The benchmark's own
-measured instrument orders the cells better than the benchmark's hand-designed
-axis, which is at once a validation of $d_{\mathrm{trans}}$ and an amendment to
-the design.
+Second, and more seriously, $d_{\mathrm{trans}}$ is not a drop-in replacement
+for the labelled axis, and its $\rho = 0.53$ should not be read as one. Between
+families it separates cleanly --- DMControl's cells sit near $5$ where
+MiniGrid's sit near $20$ --- but \emph{within} a family it mostly does not.
+Gymnasium's three levels have medians of $28.75$, $30.86$ and $24.71$ spanning
+about six units, while each of those cells spans fifteen to nineteen across its
+five seeds ($[21.5, 37.0]$, $[18.5, 37.2]$, $[17.7, 30.1]$); the rank order is
+a rank order over medians that are inside each other's noise. MiniGrid inverts
+min and med on the same terms ($20.07$ against $19.59$). The budget rerun of
+Section~\ref{sec:results:axis} confirms the diagnosis directly: at twice the
+updates, Gymnasium's medium and maximum medians swap places ($57.30$ against
+$71.51$), while their seed ranges remain all but identical. Much of the rank
+correlation is therefore carried by between-family separation, which is the
+comparison $d_{\mathrm{trans}}$ is least entitled to make
+(Section~\ref{sec:method:distances}).
+
+What survives is narrower than a replacement axis and still worth stating: a
+measured distance is answerable to evidence in a way a label is not, and this
+one answered. It says its own within-family orderings are not resolved at five
+seeds, and it changes when the budget changes --- which is itself a finding
+about Equation~\ref{eq:dtrans}, since a distance between two environments
+should not depend on how long one trains the models used to measure it.
 
 \subsection{Three cells produce no forgetting, and we report them as controls}
 \label{sec:results:controls}
@@ -291,9 +319,13 @@ it can claim anything was forgotten: a scaling study on MiniGrid takes held-out
 task-A reconstruction from $6.49$ at 1000 updates to $1.61$ at the 5000 used
 here and $1.37$ at 10000, so the chosen budget is past the steep part of the
 curve but not at its floor, and absolute magnitudes should be read as
-budget-dependent. The protocol is declared in the config, recorded in every
-result file, and refused by the runner if two budgets would be averaged into one
-cell.
+budget-dependent. Two of the nine cells were rerun at twice the budget, and what
+that establishes is bounded: the direction of the axis result survives in the
+family where the levels are nested, and $d_{\mathrm{trans}}$ does not
+(Sections~\ref{sec:results:axis} and~\ref{sec:results:predictors}). The other
+seven cells were not rerun. The protocol is declared in the config, recorded in
+every result file, and refused by the runner if two budgets would be averaged
+into one cell.
 
 \textbf{One task switch.} The formalism is stated for $T_1 \ldots T_k$; the
 experiments run $k = 2$.

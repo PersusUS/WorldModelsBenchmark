@@ -34,37 +34,59 @@ distance for every task pair, and treat level labels as construction parameters
 rather than as an independent variable.} $d_{\mathrm{trans}}$ costs one model per
 environment --- in our grid, a 20\% surcharge on the total training budget --- and
 it is defined wherever transitions can be sampled, including families where no
-parameter vector exists to difference. It is not a finished instrument. It
-recovers the RD ordering in Gymnasium, separates DMControl's minimum from the
-rest, and fails in MiniGrid; and as we compute it, the two reference models are
-trained independently, so one of them is scored in the other's latent basis and
-part of what it reports is basis mismatch rather than a difference in dynamics
-(Section~\ref{sec:method:distances}). That is why we use it to rank cells and
-not to compare magnitudes across families, and it is the first thing we would
-fix --- a reference pair sharing one frozen encoder trained on both tasks would
-remove the confound at the cost of one more sweep. What survives those caveats
-is that the quantity is measured rather than asserted, and that on these nine
-cells it outranks the hand-designed axis by an order of magnitude in rank
-correlation ($0.53$ against $0.05$).
+parameter vector exists to difference.
+
+Our own instrument is not the finished form of that recommendation, and we
+would rather say so than let $\rho = 0.53$ stand as an endorsement. Two defects,
+both established in Section~\ref{sec:results:predictors}. It does not resolve
+orderings within a family at five seeds: the gaps between Gymnasium's levels are
+a third of the spread within them, and doubling the training budget swaps two of
+the three. And as we compute it, the two reference models are trained
+independently, so one is scored in the other's latent basis and part of what it
+reports is basis mismatch rather than a difference in dynamics
+(Section~\ref{sec:method:distances}) --- which also explains why the quantity
+moves when the budget does, and a distance between two environments should not.
+
+Both have concrete fixes we did not run: a reference pair sharing one frozen
+encoder trained on both tasks removes the confound, and more seeds resolve the
+orderings or show there is nothing to resolve. The recommendation we stand
+behind is therefore the weaker and more durable half of it --- report a measured
+distance and hold it to account --- rather than this particular estimator. It is
+worth noting which way the evidence ran: it was the measured quantity that
+exposed its own limits under a budget change, and the labelled axis that could
+not, because a label has nothing to be wrong about.
 
 \subsection{Two things called ``distance'' are being conflated}
 \label{sec:discussion:conflation}
 
 The peak at the medium level is consistent across families, which invites a
-mechanism rather than a list of exceptions. The one we favour, and cannot yet
-establish, is that forgetting tracks \emph{how much the model actually updates},
-and that this is non-monotone in distance for a reason that has nothing to do
-with similarity: at minimum distance there is little to update, and at maximum
-distance the model often fails to fit task~B at all, so there is little updating
-either. Overwriting requires a task that is both different and learnable.
+mechanism rather than a list of exceptions. The one we favour is that forgetting
+tracks \emph{how much the model actually updates}, and that this is non-monotone
+in distance for a reason that has nothing to do with similarity: overwriting
+requires a task that is both different and learnable, and the two conditions
+pull apart at the top of the axis.
+
+Gymnasium is the case where we can say why, because the budget rerun measured
+it. There the maximum level is not a task the model fails to learn --- it fits
+task~B \emph{better} than the medium level does, at both budgets. A cheetah at
+triple mass, half friction and $40\%$ gravity moves very little, and the
+observations it generates are correspondingly less varied. The strongest
+perturbation in that family produces the \emph{easiest} task~B, and the least
+forgetting, which is the account working rather than an exception to it: what
+was overwritten tracked what there was to learn, not how far the environment had
+been moved. Note also what this does to the axis, since a perturbation is
+supposed to make a task harder: the construction's own premise fails at its own
+top level.
 
 If that is right, the notion of task distance used in this literature bundles
 two variables that come apart. One is \emph{dissimilarity}: how far the new
 environment's dynamics sit from the old. The other is \emph{learning demand}: how
 much the model has to change to fit the new task at the available budget. They
 correlate at the low end --- a nearby task is easy and demands little --- and they
-decouple at the high end, where a distant task can be so hard that the model
-learns almost nothing from it.
+decouple at the high end, where a distant task can be one the model learns
+almost nothing from: because it is too hard, as we suspect in DMControl, or
+because it is too impoverished, as we measured in Gymnasium. Those are opposite
+failures of the same bundling.
 
 Our data show the seam. Task-B difficulty is the best single predictor we have
 ($\rho = 0.58$), and it is best precisely because it is closer to learning

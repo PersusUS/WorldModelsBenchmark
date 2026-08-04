@@ -40,6 +40,7 @@ from experiments.summarize_results import (
     load_runs,
     is_right_skewed,
     observed_seeds,
+    seed_counts,
     shared_protocol,
     spearman,
     task_a_loss,
@@ -173,7 +174,7 @@ def protocol_table(runs):
     # seeds are added to a finished grid the block records what an invocation
     # was asked for, and only the cells know what exists. They need not be
     # equal across cells, so this reports the range and Table 2 the detail.
-    counts = sorted({len(s) for s in observed_seeds(runs).values()})
+    counts = seed_counts(runs)
     lines.append("Seeds per cell & "
                  + (f"{counts[0]}" if len(counts) == 1
                     else f"{counts[0]}--{counts[-1]}")

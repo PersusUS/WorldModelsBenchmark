@@ -6,9 +6,6 @@ cannot disagree, so what is pinned here is that the LaTeX carries the same
 marks and the same aggregation the summary uses — the peak level, the control
 dagger, the skew asterisk — and that nothing in it is hand-written.
 """
-import numpy as np
-import pytest
-
 from experiments.export_tables import (
     HEADER,
     axis_table,

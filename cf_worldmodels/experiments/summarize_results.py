@@ -123,6 +123,16 @@ def observed_seeds(runs: list) -> dict:
             for key, seeds in cells.items()}
 
 
+def seed_counts(runs: list) -> list:
+    """The distinct per-cell seed counts, ascending.
+
+    One element means the grid is balanced; more than one means some cells
+    were extended and others were not, which both the console summary and
+    Table 1 have to say out loud rather than average over.
+    """
+    return sorted({len(seeds) for seeds in observed_seeds(runs).values()})
+
+
 def check_runs_consistent(runs: list) -> None:
     """
     Refuse a results directory whose runs cannot be aggregated together.
@@ -678,18 +688,19 @@ def main(argv=None):
               f"n_collect={protocol['n_collect']} "
               f"batch_size={protocol['batch_size']} "
               f"seq_len={protocol['seq_len']}")
-        # Seeds come from the runs, not from the protocol block: after seeds
-        # are added to a finished grid the block says what one invocation was
-        # asked for, and the cells say what exists.
-        per_cell = observed_seeds(runs)
-        counts = sorted({len(s) for s in per_cell.values()})
-        if len(counts) == 1:
-            print(f"seeds: {counts[0]} per cell")
-        else:
-            print(f"seeds: {counts[0]}-{counts[-1]} per cell, unevenly:")
-            for (family, distance), seeds in sorted(per_cell.items()):
-                print(f"  {family:<10} {distance:<14} n={len(seeds):>2}  "
-                      f"{seeds}")
+
+    # Outside the block above on purpose: when the protocols disagree, which
+    # seeds exist per cell is the first thing you want to see, not the last
+    # thing withheld. Counted off the runs rather than read from the protocol
+    # block, which after an extension records what one invocation was asked
+    # for rather than what exists.
+    counts = seed_counts(runs)
+    if len(counts) == 1:
+        print(f"seeds: {counts[0]} per cell")
+    elif counts:
+        print(f"seeds: {counts[0]}-{counts[-1]} per cell, unevenly:")
+        for (family, distance), seeds in sorted(observed_seeds(runs).items()):
+            print(f"  {family:<10} {distance:<14} n={len(seeds):>2}  {seeds}")
 
     print("\n" + "=" * 78)
     print("FORGETTING METRICS (median [min, max] across seeds; ! = right-skewed)")

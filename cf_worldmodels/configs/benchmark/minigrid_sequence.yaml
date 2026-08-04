@@ -1,0 +1,46 @@
+benchmark:
+  family: "minigrid"
+  # A sequence rather than a pair. These are the same four environments the
+  # paired grid uses across its three distance levels, in the same order, so
+  # the k=4 result and the k=2 grid describe the same environments and any
+  # difference between them is about sequence length and nothing else.
+  tasks:
+    - env_id: "MiniGrid-Empty-5x5-v0"
+      params: {}
+    - env_id: "MiniGrid-Empty-8x8-v0"
+      params: {}
+    - env_id: "MiniGrid-FourRooms-v0"
+      params: {}
+    - env_id: "MiniGrid-KeyCorridorS3R1-v0"
+      params: {}
+
+# Identical to configs/benchmark/minigrid.yaml. Deliberately duplicated rather
+# than shared: a sequence run that silently inherited a changed budget from the
+# paired grid would be incomparable to it without anything saying so, and the
+# whole point of this run is to be comparable to it.
+protocol:
+  n_collect: 20
+  n_train: 5000
+  batch_size: 8
+  seq_len: 5
+  learning_rate: 1.0e-3
+  curve_points: 20
+  n_eval_episodes: 10
+  n_eval_transitions: 100
+  n_fisher_transitions: 50
+  n_recon_frames: 200
+  rd_horizon: 15
+  rd_samples: 50
+  ewc_lambda: 1000.0
+  mc_dropout_T_train: 3
+  wmf_weights:
+    alpha: 0.4
+    beta: 0.4
+    gamma: 0.2
+  seeds: [0, 1, 2, 3, 4]
+
+model:
+  latent_dim: 32
+  hidden_dim: 512
+  action_dim: 7
+  beta_kl: 1.0

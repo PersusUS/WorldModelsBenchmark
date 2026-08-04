@@ -1,0 +1,53 @@
+{
+  "d_trans": 25.52996063232422,
+  "heldout_reconstruction_B_from_scratch": 32.74327537536621,
+  "heldout_reconstruction_A_from_scratch": 40.23806182861328,
+  "final_reconstruction_loss_A": 4.184955596923828,
+  "final_reconstruction_loss_B": 4.088952541351318,
+  "n_nan_steps_A": 0,
+  "n_nan_steps_B": 0,
+  "family": "minigrid",
+  "distance": "distance_max",
+  "seed": 5,
+  "tasks": {
+    "task_A": {
+      "env_id": "MiniGrid-FourRooms-v0",
+      "params": {}
+    },
+    "task_B": {
+      "env_id": "MiniGrid-KeyCorridorS3R1-v0",
+      "params": {}
+    }
+  },
+  "protocol": {
+    "n_collect": 20,
+    "n_train": 5000,
+    "batch_size": 8,
+    "seq_len": 5,
+    "learning_rate": 0.001,
+    "curve_points": 20,
+    "n_eval_episodes": 10,
+    "n_eval_transitions": 100,
+    "n_fisher_transitions": 50,
+    "n_recon_frames": 200,
+    "rd_horizon": 15,
+    "rd_samples": 50,
+    "ewc_lambda": 1000.0,
+    "mc_dropout_T_train": 3,
+    "seeds": [
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "wmf_weights": {
+      "alpha": 0.4,
+      "beta": 0.4,
+      "gamma": 0.2
+    },
+    "latent_dim": 32,
+    "hidden_dim": 512,
+    "beta_kl": 1.0
+  }
+}

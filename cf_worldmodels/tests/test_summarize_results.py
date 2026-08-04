@@ -24,9 +24,11 @@ from experiments.summarize_results import (
     effect_size,
     is_right_skewed,
     load_runs,
+    observed_seeds,
     paired_differences,
     permutation_p,
     rank,
+    protocol_identity,
     shared_protocol,
     spearman,
     task_a_loss,
@@ -128,7 +130,7 @@ def test_cell_d_trans_drops_a_stored_null():
 
 def test_shared_protocol_returned_when_all_agree():
     runs = [make_run("finetuning", s, 1.0) for s in range(3)]
-    assert shared_protocol(runs) == PROTOCOL
+    assert shared_protocol(runs) == protocol_identity(PROTOCOL)
 
 
 def test_mixed_protocols_are_detected():
@@ -143,7 +145,31 @@ def test_protocol_comparison_ignores_key_order():
     reordered = {k: PROTOCOL[k] for k in reversed(list(PROTOCOL))}
     runs = [make_run("finetuning", 0, 1.0),
             make_run("finetuning", 1, 2.0, protocol=reordered)]
-    assert shared_protocol(runs) == PROTOCOL
+    assert shared_protocol(runs) == protocol_identity(PROTOCOL)
+
+
+def test_a_different_seed_list_does_not_make_runs_incomparable():
+    """Adding seeds to a finished grid records a different `seeds` list in the
+    new runs' protocol block. That is provenance, not budget: refusing to pool
+    them would refuse the entire point of extending the grid."""
+    extended = dict(PROTOCOL, seeds=[5, 6, 7, 8, 9])
+    runs = [make_run("finetuning", 0, 1.0),
+            make_run("finetuning", 5, 2.0, protocol=extended)]
+    assert shared_protocol(runs) is not None
+    check_runs_consistent(runs)          # must not raise
+    assert "seeds" not in shared_protocol(runs)
+
+
+def test_observed_seeds_reports_what_ran_not_what_was_asked_for():
+    runs = [make_run("finetuning", 0, 1.0),
+            make_run("ewc", 0, 1.0),
+            make_run("finetuning", 7, 1.0,
+                     protocol=dict(PROTOCOL, seeds=[5, 6, 7, 8, 9])),
+            make_run("finetuning", 3, 1.0, distance="distance_max")]
+    assert observed_seeds(runs) == {
+        ("minigrid", "distance_med"): [0, 7],
+        ("minigrid", "distance_max"): [3],
+    }
 
 
 # --- cell selection --------------------------------------------------------

@@ -48,7 +48,12 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments.run_full_benchmark import DISTANCES, FAMILY_CONFIGS, METHODS
+from experiments.run_full_benchmark import (
+    DISTANCES,
+    FAMILY_CONFIGS,
+    METHODS,
+    protocol_identity,
+)
 
 # What the benchmark reports. PF and RD are the forgetting metrics and they are
 # printed side by side rather than folded into WMF: they live on different
@@ -95,11 +100,27 @@ def shared_protocol(runs: list):
 
     Mixing budgets in one aggregate is the failure this returns None for; the
     caller decides how loudly to complain.
+
+    Compared on `protocol_identity`, so the `seeds` list an invocation happened
+    to be given does not make two otherwise identical results incomparable.
+    The returned dict carries no `seeds` key for that reason: which seeds ran
+    is a property of the runs, and `observed_seeds` answers it from them.
     """
-    protocols = [json.dumps(r.get("protocol"), sort_keys=True) for r in runs]
+    protocols = [json.dumps(protocol_identity(r.get("protocol")), sort_keys=True)
+                 for r in runs]
     if not protocols or len(set(protocols)) != 1:
         return None
     return json.loads(protocols[0])
+
+
+def observed_seeds(runs: list) -> dict:
+    """{(family, distance): sorted seeds that actually ran}."""
+    cells = {}
+    for run in runs:
+        key = (run.get("family"), run.get("distance"))
+        cells.setdefault(key, set()).add(run.get("seed"))
+    return {key: sorted(v for v in seeds if v is not None)
+            for key, seeds in cells.items()}
 
 
 def check_runs_consistent(runs: list) -> None:
@@ -118,8 +139,8 @@ def check_runs_consistent(runs: list) -> None:
     """
     with_protocol = [r for r in runs if r.get("protocol")]
     if with_protocol and shared_protocol(with_protocol) is None:
-        distinct = len({json.dumps(r["protocol"], sort_keys=True)
-                        for r in with_protocol})
+        distinct = len({json.dumps(protocol_identity(r["protocol"]),
+                                   sort_keys=True) for r in with_protocol})
         raise ValueError(
             f"{distinct} different protocols across {len(with_protocol)} "
             "runs: they were produced under different budgets and cannot be "
@@ -656,8 +677,19 @@ def main(argv=None):
         print(f"protocol: n_train={protocol['n_train']} "
               f"n_collect={protocol['n_collect']} "
               f"batch_size={protocol['batch_size']} "
-              f"seq_len={protocol['seq_len']} "
-              f"seeds={protocol['seeds']}")
+              f"seq_len={protocol['seq_len']}")
+        # Seeds come from the runs, not from the protocol block: after seeds
+        # are added to a finished grid the block says what one invocation was
+        # asked for, and the cells say what exists.
+        per_cell = observed_seeds(runs)
+        counts = sorted({len(s) for s in per_cell.values()})
+        if len(counts) == 1:
+            print(f"seeds: {counts[0]} per cell")
+        else:
+            print(f"seeds: {counts[0]}-{counts[-1]} per cell, unevenly:")
+            for (family, distance), seeds in sorted(per_cell.items()):
+                print(f"  {family:<10} {distance:<14} n={len(seeds):>2}  "
+                      f"{seeds}")
 
     print("\n" + "=" * 78)
     print("FORGETTING METRICS (median [min, max] across seeds; ! = right-skewed)")

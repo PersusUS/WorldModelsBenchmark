@@ -94,6 +94,22 @@ PROTOCOL_FIELDS = {
 }
 MODEL_FIELDS = {"latent_dim": int, "hidden_dim": int, "beta_kl": float}
 
+# Recorded in every result's protocol block, but NOT part of what two results
+# must share to be comparable. `seeds` is the list one invocation was asked to
+# run: provenance, not budget. A cell trained under `--seeds 5 6 7 8 9` and one
+# trained under the config's `[0, 1, 2, 3, 4]` have identical hyperparameters,
+# and pooling them is the entire point of adding seeds to a finished grid.
+# Comparing whole protocol dicts made the runner refuse its own cache after any
+# --seeds override, and made the summary refuse to aggregate a grid it had just
+# extended.
+PROTOCOL_IDENTITY_EXCLUDED = {"seeds"}
+
+
+def protocol_identity(protocol) -> dict:
+    """The part of a protocol block two results must share to be pooled."""
+    return {key: value for key, value in (protocol or {}).items()
+            if key not in PROTOCOL_IDENTITY_EXCLUDED}
+
 
 def resolve_protocol(cfg, overrides=None) -> dict:
     """
@@ -451,7 +467,7 @@ def load_reference(results_root, family, distance, seed, protocol, tasks=None):
     if not path.exists():
         return None
     stored = json.load(open(path))
-    if stored.get("protocol") != protocol:
+    if protocol_identity(stored.get("protocol")) != protocol_identity(protocol):
         raise SystemExit(
             f"{path} was produced under a different protocol than the one "
             "requested. Archive or delete it before running."
@@ -673,7 +689,7 @@ def check_protocol_consistency(paths, protocol, tasks_by_distance=None):
     mismatched = []
     for path in paths:
         stored = json.load(open(path))
-        if stored.get("protocol") != protocol:
+        if protocol_identity(stored.get("protocol")) != protocol_identity(protocol):
             mismatched.append((path, "protocol"))
             continue
         if tasks_by_distance is not None:

@@ -28,9 +28,9 @@ whether a mitigation preserved the dynamics or preserved a policy robust to
 their degradation, and those two ask for different fixes.
 
 So we built the missing instrument --- three environment families, three levels
-of dynamic distance each, five continual learning methods, five seeds, 225 runs
-plus 45 from-scratch reference pairs --- and this paper is mostly about what it
-told us that we had not asked. Both findings are negative, and neither is about
+of dynamic distance each, five continual learning methods, ten seeds in every
+cell that discriminates between them, 375 runs plus 75 from-scratch reference
+pairs --- and this paper is mostly about what it told us that we had not asked. Both findings are negative, and neither is about
 which method wins.
 
 \paragraph{The distance axis does not order forgetting.} The benchmark, like
@@ -38,10 +38,12 @@ most in this literature, is built around an ordinal notion of how far apart two
 tasks are, with the expectation that forgetting grows along it. It does not.
 Forgetting peaks at the \emph{medium} level in all three families, so the
 labelled order is wrong in every one of them. Across the nine cells the label
-is uninformative ($\rho = 0.05$) while the difficulty of the new task predicts
-forgetting far better ($\rho = 0.58$), which is why we read the result as
-forgetting scaling with what the new task demands of the model rather than with
-its distance from the old one.
+carries no rank information at all ($\rho = 0.00$), while both quantities we
+measure --- the distance between the environments' transition models and the
+difficulty of the new task --- do better ($0.58$ and $0.43$). We read the result
+as forgetting scaling with what the new task demands of the model rather than
+with its distance from the old one, on evidence set out in
+Section~\ref{sec:results:predictors} that is firmer than either correlation.
 
 The cleanest evidence needs no comparison across families. In Gymnasium the
 maximum level is the medium perturbation plus two further ones, applied to the
@@ -59,20 +61,20 @@ Component-level metrics have to hold a representation fixed in order to
 attribute a change to the component, and ours do: prediction fidelity and
 rollout divergence score $M$ in a latent basis encoded once. That is the
 isolation we wanted, and it has a cost we can now measure. Fine-tuning's
-held-out reconstruction of the first task degrades by a factor of $745$ while
-its prediction fidelity reads $-6.21$ --- in the frozen basis, the model
+held-out reconstruction of the first task degrades by a factor of $811$ while
+its prediction fidelity reads $-5.58$ --- in the frozen basis, the model
 \emph{improved}. EWC makes the dissociation exact and predicts it from its own
 definition: its Fisher information is taken over $\log P(z' \mid z, a)$, which
 contains no encoder parameter, so it is identically zero there. It preserves
-the transition component almost perfectly ($-0.07$) while its encoder degrades
-by $753$. A benchmark reporting only PF and RD would certify that neither model
+the transition component almost perfectly ($-0.03$) while its encoder degrades
+by $800$. A benchmark reporting only PF and RD would certify that neither model
 forgot anything.
 
 \paragraph{Contributions.}
 \begin{enumerate}
   \item \textbf{A negative result about how these experiments are designed.}
   Level labels do not index forgetting, in any of three families, under any
-  aggregation we tried and at two training budgets. We recommend reporting a
+  aggregation we tried, at two training budgets and at two seed counts. We recommend reporting a
   measured distance per task pair and holding it to account --- a standard our
   own measured distance fails, which we report rather than omit.
   \item \textbf{A negative result about how they are read.} Forgetting in a

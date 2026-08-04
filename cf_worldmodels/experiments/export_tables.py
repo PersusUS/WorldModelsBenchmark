@@ -39,6 +39,7 @@ from experiments.summarize_results import (
     control_cells,
     load_runs,
     is_right_skewed,
+    observed_seeds,
     shared_protocol,
     spearman,
     task_a_loss,
@@ -160,7 +161,6 @@ def protocol_table(runs):
     protocol = shared_protocol([r for r in runs if r.get("protocol")])
     if protocol is None:
         raise ValueError("no run carries a protocol block")
-    seeds = protocol.get("seeds") or []
 
     lines = [HEADER, r"\begin{tabular}{lr}", r"\toprule",
              r"Parameter & Value \\", r"\midrule"]
@@ -169,8 +169,15 @@ def protocol_table(runs):
             number = (spec[0] if spec else "{:.0f}").format(
                 float(protocol[key]))
             lines.append(f"{label} & {number} \\\\")
-    lines.append(f"Seeds & {len(seeds)} "
-                 f"({', '.join(str(s) for s in seeds)}) \\\\")
+    # Seeds are counted off the runs, never read from the protocol block: once
+    # seeds are added to a finished grid the block records what an invocation
+    # was asked for, and only the cells know what exists. They need not be
+    # equal across cells, so this reports the range and Table 2 the detail.
+    counts = sorted({len(s) for s in observed_seeds(runs).values()})
+    lines.append("Seeds per cell & "
+                 + (f"{counts[0]}" if len(counts) == 1
+                    else f"{counts[0]}--{counts[-1]}")
+                 + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
 
@@ -197,9 +204,10 @@ def tasks_table(runs, families, distances):
     evidence of what produced the numbers. That a cell's runs agree on their
     pair is `check_runs_consistent`'s job.
     """
-    lines = [HEADER, r"\begin{tabular}{llllrr}", r"\toprule",
-             r"Family & Level & Task A & Task B & $d_{\mathrm{param}}$ & "
-             r"$d_{\mathrm{trans}}$ \\",
+    seeds_by_cell = observed_seeds(runs)
+    lines = [HEADER, r"\begin{tabular}{llllrrr}", r"\toprule",
+             r"Family & Level & Task A & Task B & Seeds & "
+             r"$d_{\mathrm{param}}$ & $d_{\mathrm{trans}}$ \\",
              r"\midrule"]
     previous = None
     for family in families:
@@ -214,6 +222,7 @@ def tasks_table(runs, families, distances):
                 f"{name} & {LEVEL_LABEL[distance]} & "
                 f"{task_label(tasks['task_A'])} & "
                 f"{task_label(tasks['task_B'])} & "
+                + str(len(seeds_by_cell.get((family, distance), []))) + " & "
                 + fmt(d_param_for_pair(tasks), 3) + " & "
                 + (fmt(float(np.median(per_seed))) if per_seed else "--")
                 + r" \\")

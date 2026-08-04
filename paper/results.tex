@@ -12,35 +12,41 @@
 \label{sec:results}
 
 We ran the full grid: three environment families $\times$ three dynamic-distance
-levels $\times$ five methods $\times$ five seeds, for 225 runs, each training a
-world model on task~A and then on task~B under one protocol (5000 gradient
-steps, 20 random-policy episodes per task, batch~8, sequence length~5). A
-further 45 reference pairs --- one model per environment, trained from scratch
---- supply the from-scratch arm of forward transfer and the measured distance
-$d_{\mathrm{trans}}$. No run dropped a NaN step.
+levels $\times$ five methods, each training a world model on task~A and then on
+task~B under one protocol (5000 gradient steps, 20 random-policy episodes per
+task, batch~8, sequence length~5). Every cell ran five seeds, and the six cells
+that discriminate between methods --- Section~\ref{sec:results:controls}
+identifies the other three as controls --- were then extended to ten, for 375
+runs in total. A further 75 reference pairs --- one model per environment,
+trained from scratch --- supply the from-scratch arm of forward transfer and the
+measured distance $d_{\mathrm{trans}}$. No run dropped a NaN step.
 
 \subsection{How the numbers are reported}
 \label{sec:results:reporting}
 
-Cells are summarised by the \emph{median} over their five seeds, with the full
-seed range where space allows. This is not cosmetic. RD is a KL divergence and
-is unbounded above, so a method whose post-task-B model becomes overconfident
-acquires a heavy right tail by construction: our own method, UG-MTM on
-MiniGrid at maximum distance, produces $17.7$, $40.0$, $520$, $574$ and $4364$
-across its five seeds, and the mean of those, $1103$, describes none of them.
-The skew is common rather than exceptional --- 22 of the 180 forgetting cells
-have an upper half that stretches more than five times further from the median
-than their lower half --- so we report medians throughout and mark the skewed
-cells ($\ast$) rather than averaging the tail away.
+Cells are summarised by the \emph{median} over their seeds, with the full seed
+range where space allows. This is not cosmetic. RD is a KL divergence and is
+unbounded above, so a method whose post-task-B model becomes overconfident
+acquires a heavy right tail by construction: our own method, UG-MTM on MiniGrid
+at maximum distance, produces $17.7$, $40.0$, $70.8$, $520$, $575$, $577$,
+$1490$, $4364$, $4963$ and $8135$ across its ten seeds, and the mean of those,
+$2075$, is larger than seven of them. The skew is common rather than
+exceptional --- 17 of the 180 forgetting cells have an upper half that stretches
+more than five times further from the median than their lower half --- so we
+report medians throughout and mark the skewed cells ($\ast$) rather than
+averaging the tail away.
 
 PF and RD are reported separately. The aggregate WMF of the earlier
 formulation is dominated by RD, which supplies 78--97\% of it, so a single
 scalar would be RD with extra steps. Comparisons between methods are paired by
-seed and tested with an exact two-sided permutation test over all $2^5$ sign
-flips. With $n=5$ that test cannot return a $p$ below $2/2^5 = 0.0625$; we
-report it alongside the paired effect size $d_z$ and the win count, and we do
-not report parametric $p$-values, which at this $n$ would be statements about
-the normality assumption rather than about the data.
+seed and tested with an exact two-sided permutation test over all $2^n$ sign
+flips, alongside the paired effect size $d_z$ and the win count. We do not
+report parametric $p$-values. The seed count matters for what those tests can
+say and is why we bought more of them: at $n=5$ the exact test cannot return a
+$p$ below $2/2^5 = 0.0625$, so no five-seed comparison can reach conventional
+significance at all, whereas at $n=10$ the floor is $2/2^{10} \approx 0.002$.
+Comparisons drawn from the three control cells remain at five seeds and inherit
+that ceiling; the ones the paper rests on do not.
 
 \subsection{The labelled distance axis does not order forgetting}
 \label{sec:results:axis}
@@ -71,7 +77,7 @@ families, because there the two upper levels are nested by construction. Both
 move HalfCheetah from gravity $9.8$ to $4.0$; the maximum level additionally
 scales mass by $3$ and friction by $0.5$. It is strictly the medium
 perturbation plus more perturbation, and it produces \emph{less} forgetting
-($59.59$ against $85.91$).
+($64.01$ against $85.91$).
 
 The obvious objection is that this is a statement about our budget rather than
 about forgetting: if at the maximum level the model never fits task~B, nothing
@@ -79,19 +85,19 @@ gets overwritten and the cell reads low for an uninteresting reason. We tested
 it by rerunning both cells at twice the training budget, and it does not hold
 up. The ordering survives --- restricted to fine-tuning, so that the two budgets
 are compared on the same estimator, the cells read $118.04$ (medium) against
-$58.79$ (maximum) at 5000 updates and $144.70$ against $102.18$ at 10000 --- and
+$60.18$ (maximum) at 5000 updates and $144.70$ against $102.18$ at 10000 --- and
 the mechanism the objection proposes is the opposite of what happens. Task~B is
 \emph{easier} to fit at the maximum level than at the medium one, at both
-budgets ($17.31$ against $27.10$, and $15.14$ against $24.65$): the heavier,
+budgets ($17.44$ against $27.28$, and $15.14$ against $24.65$): the heavier,
 lower-friction, low-gravity cheetah moves less, and a less varied task is a
 task with less to learn from. What we report as robust is the direction, which
 survives the doubling; the magnitude is budget-dependent, the ratio between the
-two cells falling from $2.01$ to $1.42$.
+two cells falling from $1.96$ to $1.42$.
 
 The aggregate in Table~\ref{tab:axis} deliberately excludes UG-MTM. It freezes
-its encoder, which puts its RD two orders of magnitude below the other four
-methods in DMControl ($0.002$ against $1.2$); pooling all five would average two
-scales rather than read the axis. Its own numbers appear in
+its encoder, which puts its RD three orders of magnitude below the other four
+methods in DMControl ($0.02$ against $50$ to $77$ at the medium level); pooling
+all five would average two scales rather than read the axis. Its own numbers appear in
 Section~\ref{sec:results:methods} and in Table~\ref{tab:rd}.
 
 \subsection{What does predict forgetting}
@@ -114,41 +120,54 @@ hard task~B is to fit at this budget.
   \label{tab:predictors}
 \end{table}
 
-Table~\ref{tab:predictors} shows the outcome. The labelled level is
-uninformative ($\rho = 0.05$). The measured distance does better
-($\rho = 0.53$), and the difficulty of task~B does best ($\rho = 0.58$). In
-MiniGrid and Gymnasium the two columns rise and fall together, and the medium
-level is exactly where task~B is hardest to fit ($42.26$ against $2.35$ and
-$21.53$ in MiniGrid).
+Table~\ref{tab:predictors} shows the outcome. The labelled level carries no
+information at all ($\rho = 0.00$). Both measured quantities do better: the
+transition distance reaches $\rho = 0.58$ and task-B difficulty $\rho = 0.43$.
+In MiniGrid and Gymnasium the difficulty column rises and falls with RD, and
+the medium level is exactly where task~B is hardest to fit ($42.60$ against
+$2.01$ and $23.59$ in MiniGrid; $27.28$ against $24.63$ and $17.44$ in
+Gymnasium).
 
 The reading we draw is that \textbf{forgetting scales with how much the new task
-demands of the model, not with how far it is from the old one}. We state it as
-the best available account rather than a demonstrated mechanism, because
-DMControl does not follow it: task-B difficulty there keeps rising from minimum
-to maximum ($15.43$, $35.17$, $39.00$) while RD falls after the medium level.
-Task-B difficulty is the best of the three predictors and it explains two
-families out of three; what all nine cells agree on is the negative result, that
-the labelled axis explains none.
+demands of the model, not with how far it is from the old one}, and we state it
+as the best available account rather than a demonstrated mechanism, for two
+reasons. DMControl does not follow it: task-B difficulty there keeps rising from
+minimum to maximum ($15.43$, $34.07$, $40.54$) while RD falls after the medium
+level. And the ranking between the two measured predictors is not stable ---
+before we extended the discriminating cells to ten seeds, task-B difficulty led
+at $0.58$ with the transition distance at $0.53$, and adding seeds reversed
+them. What does not move is the negative result: the labelled level was
+uninformative at five seeds and is uninformative at ten.
 
-Two caveats belong with this. First, $n = 9$, with three families on very
-different scales, and a rank correlation over pooled cells is indicative rather
-than conclusive; the repeated peak of Section~\ref{sec:results:axis} is the
-robust half of the finding and the correlations are the interpretation of it.
+That instability is the first caveat, and it is worth reading literally rather
+than as boilerplate. These are rank correlations over $n = 9$ points drawn from
+three families whose scales differ by an order of magnitude, and we have now
+watched the ordering of the top two change under a manipulation that left the
+finding itself untouched. What the correlations establish is that both measured
+quantities beat the label decisively and that neither is resolved against the
+other; the load-bearing evidence for the account is not here but in
+Section~\ref{sec:results:axis}, where the Gymnasium pair differs by a
+construction we control and the more heavily perturbed level is measurably the
+easier task. The repeated peak is the robust half of the finding, and the
+correlations are its interpretation.
 Second, and more seriously, $d_{\mathrm{trans}}$ is not a drop-in replacement
-for the labelled axis, and its $\rho = 0.53$ should not be read as one. Between
-families it separates cleanly --- DMControl's cells sit near $5$ where
-MiniGrid's sit near $20$ --- but \emph{within} a family it mostly does not.
-Gymnasium's three levels have medians of $28.75$, $30.86$ and $24.71$ spanning
-about six units, while each of those cells spans fifteen to nineteen across its
-five seeds ($[21.5, 37.0]$, $[18.5, 37.2]$, $[17.7, 30.1]$); the rank order is
-a rank order over medians that are inside each other's noise. MiniGrid inverts
-min and med on the same terms ($20.07$ against $19.59$). The budget rerun of
-Section~\ref{sec:results:axis} confirms the diagnosis directly: at twice the
-updates, Gymnasium's medium and maximum medians swap places ($57.30$ against
-$71.51$), while their seed ranges remain all but identical. Much of the rank
-correlation is therefore carried by between-family separation, which is the
-comparison $d_{\mathrm{trans}}$ is least entitled to make
-(Section~\ref{sec:method:distances}).
+for the labelled axis, and its $\rho = 0.58$ --- now the highest of the three ---
+should not be read as one. Between families it separates cleanly, DMControl's
+cells sitting near $7$ where MiniGrid's sit near $22$, and that separation is
+what most of the correlation is made of. \emph{Within} a family it mostly does
+not separate at all. Gymnasium's three levels have medians of $28.75$, $30.86$
+and $24.08$, spanning about seven units, while the individual cells span fifteen
+to twenty-three across seeds ($[21.5, 37.0]$, $[18.5, 37.2]$, $[17.7, 40.6]$):
+the rank order is an order over medians that sit inside each other's noise.
+MiniGrid inverts min and med on the same terms ($22.35$ against $20.64$), and
+DMControl's medium and maximum are indistinguishable ($7.58$ against $7.46$,
+each spanning about nine). The budget rerun of Section~\ref{sec:results:axis}
+makes the diagnosis directly: at twice the updates, Gymnasium's medium and
+maximum medians swap places ($57.30$ against $71.51$) while their seed ranges
+remain all but identical. So the correlation is carried by the between-family
+comparison, which is the one $d_{\mathrm{trans}}$ is least entitled to make
+(Section~\ref{sec:method:distances}), and it leads the table for a reason that
+does not license using it as an axis.
 
 What survives is narrower than a replacement axis and still worth stating: a
 measured distance is answerable to evidence in a way a label is not, and this
@@ -163,7 +182,7 @@ should not depend on how long one trains the models used to measure it.
 Not every cell has something to forget. We call a cell a \emph{control} when no
 method's held-out task-A reconstruction error grows by more than 10\% after
 training on task~B. The threshold is not a knife edge: in every cell that does
-produce forgetting, the worst method ends between $15\times$ and $753\times$ its
+produce forgetting, the worst method ends between $15\times$ and $848\times$ its
 original error, so the nearest one sits more than $13\times$ above the threshold
 and any cutoff between $1.1$ and $14$ selects the same three cells.
 
@@ -188,7 +207,7 @@ transition component a long way. That is the subject of the next section.
   \input{tables/tab_encoder}
   \caption{Held-out task-A reconstruction error after training on task~B, as a
   factor of the same model's error before it. $1.00$ means nothing was lost,
-  $753$ means the error grew by a factor of 753. $\dagger$ marks control cells
+  $811$ means the error grew by a factor of 811. $\dagger$ marks control cells
   (Section~\ref{sec:results:controls}).}
   \label{tab:encoder}
 \end{table}
@@ -198,10 +217,10 @@ is what isolates the transition component $M$ --- the benchmark's declared
 scope. The cost of that isolation is that both metrics are blind to drift in the
 encoder itself, and Table~\ref{tab:encoder} shows how large the blind spot is.
 
-Fine-tuning's held-out task-A reconstruction grows by a factor of $745$ in
-MiniGrid at minimum distance, and its PF for that cell is $-6.21$: measured in
+Fine-tuning's held-out task-A reconstruction grows by a factor of $811$ in
+MiniGrid at minimum distance, and its PF for that cell is $-5.58$: measured in
 the frozen latent basis, the model \emph{improved}. This is not an isolated
-sign error. Fine-tuning's PF is negative in eight of the nine cells
+sign error. Fine-tuning's PF is negative in seven of the nine cells
 (Table~\ref{tab:pf}) while its encoder is destroyed in six of them.
 
 EWC makes the dissociation sharpest, and it was predicted before it was
@@ -209,13 +228,13 @@ measured. Its Fisher information is defined over $\log P(z' \mid z, a)$, so it
 is \emph{exactly} zero on every encoder parameter: the penalty cannot constrain
 the VAE even in principle. Both halves of that prediction hold. In MiniGrid at
 minimum distance EWC preserves the transition component almost perfectly
-($\text{PF} = -0.07$, against $-6.21$ for fine-tuning) while its encoder
-degrades by a factor of $753$ --- marginally worse than fine-tuning's $745$.
+($\text{PF} = -0.03$, against $-5.58$ for fine-tuning) while its encoder
+degrades by a factor of $800$ --- indistinguishable from fine-tuning's $811$.
 Across the grid its PF stays within $|0.07|$ in seven of the nine cells.
 
 Replay is the only method that keeps both. Its task-A reconstruction never grows
-by more than $27\%$, and in DMControl it \emph{improves} (factors of $0.37$ and
-$0.45$), which is what training on A and B together should do.
+by more than $31\%$, and in DMControl it \emph{improves} (factors of $0.37$ and
+$0.51$), which is what training on A and B together should do.
 
 We report this as a scope declaration rather than a defect: measuring $M$ in a
 fixed latent basis is the stated purpose, and the alternative --- letting each
@@ -231,47 +250,53 @@ alongside them.
 \begin{table}[t]
   \centering
   \input{tables/tab_pf}
-  \caption{PF (prediction fidelity) by method and cell; median over five seeds.
-  Positive means the transition component got worse at task~A. $\ast$ marks
-  cells whose seed sample is right-skewed.}
+  \caption{PF (prediction fidelity) by method and cell; median over the cell's
+  seeds (ten in the six discriminating cells, five in the controls). Positive
+  means the transition component got worse at task~A. $\ast$ marks cells whose
+  seed sample is right-skewed.}
   \label{tab:pf}
 \end{table}
 
 \begin{table}[t]
   \centering
   \input{tables/tab_rd}
-  \caption{RD (rollout divergence) by method and cell; median over five seeds.
-  $\ast$ marks right-skewed cells.}
+  \caption{RD (rollout divergence) by method and cell; median over the cell's
+  seeds. $\ast$ marks right-skewed cells.}
   \label{tab:rd}
 \end{table}
 
-\paragraph{Replay is not insufficient here.} On the six cells that produce
-forgetting, infinite replay has lower RD than fine-tuning in five, unanimously
-across seeds in four of them ($p = 0.0625$, the floor at $n=5$; $d_z$ from
-$-1.99$ to $-3.05$). The exception is Gymnasium at maximum distance, where
-replay is \emph{worse} in all five seeds ($90.61$ against $58.79$,
-$d_z = +1.79$). The direction we measure is the one expected a priori, since
-replay trains on A and B together; we note it because an earlier version of this
-benchmark reported the opposite, at $p < 0.001$ with five seeds, and that
-reversal is attributable to defects in the measurement rather than to the
-setting.
+\paragraph{Replay is not insufficient here.} At ten seeds the six forgetting
+cells separate into three groups rather than a trend. In four of them --- all
+three MiniGrid levels and DMControl's medium --- infinite replay has lower RD
+than fine-tuning in \emph{every} seed, at the exact test's floor of
+$p = 0.002$, with $d_z$ from $-2.28$ to $-3.11$. In one, Gymnasium at maximum
+distance, replay is \emph{worse}, in nine seeds of ten ($76.23$ against
+$60.18$; $p = 0.006$, $d_z = +1.14$). In the last, DMControl's maximum, there
+is no effect to report ($p = 0.68$, $d_z = -0.14$): the medians differ but the
+seeds do not agree on a direction, and at five seeds we would have called that
+a win for replay.
+
+The direction in the four is the one expected a priori, since replay trains on
+A and B together. We report it because an earlier version of this benchmark
+reported the opposite at $p < 0.001$ with five seeds, and that reversal is
+attributable to defects in the measurement rather than to the setting.
 
 \paragraph{EWC protects the transition component and only that.} Discussed in
 Section~\ref{sec:results:encoder}. Its near-zero PF is not universal: in
-DMControl's two forgetting cells it reads $-11.32$ and $-9.27$, in line with the
+DMControl's two forgetting cells it reads $-11.11$ and $-9.56$, in line with the
 other methods, so the protection is not uniform across families either.
 
 \paragraph{Progressive networks are the only baseline with consistently
-positive PF} in MiniGrid ($3.08$, $5.97$, $13.50$), i.e.\ the benchmark scores
+positive PF} in MiniGrid ($4.06$, $6.10$, $14.43$), i.e.\ the benchmark scores
 them as forgetting more of the transition component, not less --- while their
 encoder degrades like fine-tuning's. Column capacity does not help a component
 that is not the one being overwritten.
 
 \paragraph{UG-MTM does not forget because it does not learn.} Its encoder factor
 is exactly $1.00$ in all nine cells --- it is frozen, so task-A reconstruction is
-preserved bit for bit --- and it pays for that in forward transfer: FT of $-559$,
-$-525$ and $-1603$ in MiniGrid (Table~\ref{tab:ft}), where no other method
-leaves the range $[-10.48, +3.40]$ anywhere in the grid. The cost nearly
+preserved bit for bit --- and it pays for that in forward transfer: FT of $-557$,
+$-526$ and $-1642$ in MiniGrid (Table~\ref{tab:ft}), where no other method
+leaves the range $[-8.52, +2.01]$ anywhere in the grid. The cost nearly
 vanishes when the two tasks
 look alike ($-4.33$ in Gymnasium at minimum distance), which locates the regime
 where structural isolation is affordable rather than establishing that it works.
@@ -279,7 +304,7 @@ where structural isolation is affordable rather than establishing that it works.
 \paragraph{Freezing the encoder produces overconfident transition models.} This
 is the benchmark's own finding about our method, and it is why
 Section~\ref{sec:results:reporting} reports medians. UG-MTM's RD in MiniGrid at
-maximum distance spans $17.7$ to $4364$ over five seeds. Reproducing the extreme
+maximum distance spans $17.7$ to $8135$ over ten seeds. Reproducing the extreme
 seed and instrumenting the KL term by term shows the cause is not a diverging
 rollout: the KL is already $80$ at rollout step~0, the predicted means barely
 move over fifteen steps, and what explodes is the post-task-B variance, with
@@ -300,15 +325,22 @@ truncating the horizon would not hide it.
 \subsection{Threats to validity}
 \label{sec:results:threats}
 
-\textbf{Five seeds.} An exact paired permutation test cannot return $p < 0.0625$
-at $n=5$, so no comparison here reaches conventional significance without
-leaning entirely on a normality assumption. We report effect sizes and win
-counts for that reason.
+\textbf{Ten seeds, and five in the controls.} The six discriminating cells run
+ten seeds, which puts the exact paired permutation test's floor at
+$p \approx 0.002$ and is why the method comparisons of
+Section~\ref{sec:results:methods} can reach conventional significance at all.
+The three control cells remain at five, where the floor is $0.0625$: no
+comparison drawn from them can be significant, and none is load-bearing here.
+Ten is still small for an effect-size estimate, and we report $d_z$ and win
+counts alongside every $p$ rather than in place of it.
 
 \textbf{Nine cells.} The rank correlations of
 Section~\ref{sec:results:predictors} pool cells from families whose scales
 differ by an order of magnitude. They are the interpretation of
-Table~\ref{tab:predictors}, not an independent test of it.
+Table~\ref{tab:predictors}, not an independent test of it --- and the ordering
+of the top two predictors changed when we doubled the seeds in six of the nine
+cells, which is the sharpest available demonstration that $n = 9$ does not
+resolve them.
 
 \textbf{A shared source for predictor and outcome.} Task-B difficulty and RD are
 computed from the same runs, so a cell whose data is intrinsically hard can

@@ -121,10 +121,23 @@ def test_method_table_leaves_an_absent_cell_empty():
 def test_protocol_table_reports_the_budget_the_runs_carry():
     """Table 1 comes from the results, not from the config: the previous
     version of this paper described a budget it had never executed."""
-    table = protocol_table([run("finetuning", "minigrid", "distance_min", 0,
-                                rd=10.0)])
+    runs = [run("finetuning", "minigrid", "distance_min", s, rd=10.0)
+            for s in range(5)]
+    table = protocol_table(runs)
     assert "5000" in table
-    assert "Seeds & 5 (0, 1, 2, 3, 4)" in table
+    assert r"Seeds per cell & 5 \\" in table
+
+
+def test_protocol_table_counts_seeds_off_the_runs_not_the_protocol_block():
+    """After seeds are added to a finished grid the block records what one
+    invocation was asked for. Only the cells know what exists, and they need
+    not agree -- the six discriminating cells got ten, the controls kept five."""
+    runs = [run("finetuning", "minigrid", "distance_min", s, rd=10.0)
+            for s in range(10)]
+    runs += [run("finetuning", "gymnasium", "distance_min", s, rd=10.0)
+             for s in range(5)]
+    table = protocol_table(runs)
+    assert r"Seeds per cell & 5--10 \\" in table
 
 
 def test_protocol_labels_cover_every_field_the_runner_records():

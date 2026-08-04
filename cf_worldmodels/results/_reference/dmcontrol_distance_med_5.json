@@ -1,0 +1,55 @@
+{
+  "d_trans": 10.749007225036621,
+  "heldout_reconstruction_B_from_scratch": 29.573494262695313,
+  "heldout_reconstruction_A_from_scratch": 4.421424770355225,
+  "final_reconstruction_loss_A": 3.836728811264038,
+  "final_reconstruction_loss_B": 31.3452091217041,
+  "n_nan_steps_A": 0,
+  "n_nan_steps_B": 0,
+  "family": "dmcontrol",
+  "distance": "distance_med",
+  "seed": 5,
+  "tasks": {
+    "task_A": {
+      "domain_name": "cheetah",
+      "task_name": "run",
+      "params": {}
+    },
+    "task_B": {
+      "domain_name": "walker",
+      "task_name": "run",
+      "params": {}
+    }
+  },
+  "protocol": {
+    "n_collect": 20,
+    "n_train": 5000,
+    "batch_size": 8,
+    "seq_len": 5,
+    "learning_rate": 0.001,
+    "curve_points": 20,
+    "n_eval_episodes": 10,
+    "n_eval_transitions": 100,
+    "n_fisher_transitions": 50,
+    "n_recon_frames": 200,
+    "rd_horizon": 15,
+    "rd_samples": 50,
+    "ewc_lambda": 1000.0,
+    "mc_dropout_T_train": 3,
+    "seeds": [
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "wmf_weights": {
+      "alpha": 0.4,
+      "beta": 0.4,
+      "gamma": 0.2
+    },
+    "latent_dim": 32,
+    "hidden_dim": 512,
+    "beta_kl": 1.0
+  }
+}

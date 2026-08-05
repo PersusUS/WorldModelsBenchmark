@@ -29,6 +29,14 @@ from experiments.run_full_benchmark import (
     PROTOCOL_FIELDS,
 )
 from src.benchmark.distances import PHYSICS_PARAMS, d_param_for_pair
+from experiments.summarize_sequence import (
+    check_sequence_runs,
+    encoder_factor,
+    load_sequence_runs,
+    peak_stage,
+    retention_curve,
+    task_difficulty,
+)
 from experiments.summarize_results import (
     AXIS_METHODS,
     axis_value,
@@ -362,12 +370,66 @@ def method_table(runs, methods, families, distances, key):
     return "\n".join(lines) + "\n"
 
 
+def sequence_table(runs, methods, task=0):
+    """
+    Retention of one task as a sequence of k tasks goes on (D22/R20).
+
+    Two columns of the paired grid's story in one table: the latent scale that
+    PF and RD live on, and the pixel factor they cannot see. The peak column
+    counts seeds rather than reading the median curve -- a peak that only
+    survives averaging is a property of the average.
+    """
+    k = runs[0]["k"]
+    stages = list(range(task + 1, k))
+    header = " & ".join(f"after $T_{s + 1}$" for s in stages)
+    # A single header row rather than a stacked one: the alternative needs
+    # \multirow, and a generated table should not add a package to the
+    # preamble of a document it does not own.
+    lines = [HEADER,
+             r"\begin{tabular}{l" + "r" * len(stages) + "cr}", r"\toprule",
+             f"Method & {header} & Peak & Pixel $\\times$ \\\\", r"\midrule"]
+    for method in methods:
+        curve = retention_curve(runs, method, task, "rd")
+        if not curve:
+            continue
+        peak, agreeing, n_seeds = peak_stage(runs, method, task)
+        cells = []
+        for stage in stages:
+            text = fmt(float(np.median(curve[stage]))) if stage in curve else "--"
+            if stage == peak:
+                text = r"\textbf{" + text + "}"
+            cells.append(text)
+        final = encoder_factor(runs, method, task, stages[-1])
+        cells.append(f"$T_{peak + 1}$ ({agreeing}/{n_seeds})")
+        # Rendered like the paired grid's encoder table, and for the same
+        # reason: 1.00 and 773 share a column, and it lets the prose quote the
+        # table verbatim instead of rounding it a second time.
+        if not final:
+            cells.append("--")
+        else:
+            factor = float(np.median(final))
+            cells.append(f"{factor:.2f}" if factor < 10 else f"{factor:.0f}")
+        lines.append(f"{METHOD_LABEL.get(method, method)} & "
+                     + " & ".join(cells) + r" \\")
+    lines.append(r"\midrule")
+    # The difficulty of the task each stage trains on, which is what the peak
+    # tracks. Pooled over methods: at that moment each has just trained on it.
+    difficulty = " & ".join(
+        fmt(float(np.median(task_difficulty(runs, s)))) for s in stages)
+    lines.append("Difficulty of the task trained there & " + difficulty
+                 + r" & & \\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--results-dir", default="results", type=Path)
+    parser.add_argument("--sequence-dir", default=Path("results-seq"), type=Path,
+                        help="k>2 runs; the sequence table is skipped if absent")
     parser.add_argument("--out", default=Path("../paper/tables"), type=Path)
     parser.add_argument("--methods", nargs="+", default=METHODS)
     parser.add_argument("--families", nargs="+", default=list(FAMILY_CONFIGS))
@@ -403,6 +465,17 @@ def main(argv=None):
         "rd": method_table(runs, methods, families, distances, "rd"),
         "ft": method_table(runs, methods, families, distances, "ft"),
     }
+
+    # Optional: the k>2 runs live in their own directory under their own
+    # schema, and the paper's k=2 tables do not depend on them existing.
+    sequence_runs = load_sequence_runs(args.sequence_dir)
+    if sequence_runs:
+        check_sequence_runs(sequence_runs)
+        present = [m for m in args.methods
+                   if any(r.get("method") == m for r in sequence_runs)]
+        tables["sequence"] = sequence_table(sequence_runs, present)
+    else:
+        print(f"no sequence runs under {args.sequence_dir}: skipping tab_sequence")
 
     args.out.mkdir(parents=True, exist_ok=True)
     for name, body in tables.items():

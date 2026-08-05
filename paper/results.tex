@@ -322,6 +322,64 @@ truncating the horizon would not hide it.
   \label{tab:ft}
 \end{table}
 
+\subsection{The same shape appears along the sequence, not just along the axis}
+\label{sec:results:sequence}
+
+\begin{table}[t]
+  \centering
+  \input{tables/tab_sequence}
+  \caption{Retention of the first task as a four-task MiniGrid sequence goes
+  on. The three numeric columns are RD of $T_1$ measured against the model as
+  it stood when $T_1$ finished; \textbf{bold} marks each method's peak, and the
+  Peak column counts how many of its five seeds peak there rather than reading
+  the median curve. \emph{Pixel} $\times$ is held-out reconstruction of $T_1$
+  after $T_4$, as a factor of what that model had when $T_1$ finished. The last
+  row is how hard the task trained at each stage was to fit.}
+  \label{tab:sequence}
+\end{table}
+
+Everything above runs $k = 2$. The account we have drawn from it --- that
+forgetting follows what the new task demands rather than how far it sits from
+the old one --- makes a prediction about longer sequences that the paired grid
+cannot test: forgetting of the first task should rise and fall with the
+difficulty of whatever is being learned at the time, rather than accumulate
+with the number of task switches. We ran the four MiniGrid environments as one
+sequence, five seeds, same protocol and same budget, and measured every earlier
+task at every later stage.
+
+Table~\ref{tab:sequence} reports the first task's retention. Forgetting of
+$T_1$ \textbf{peaks at the third task and recedes at the fourth}, and it does so
+in \emph{all five seeds} of each of the three methods that leave the encoder
+unprotected. It does not do so for the two that protect it, where $T_1$'s
+retention drifts slowly and monotonically instead. That split is what makes the
+pattern hard to read as noise: the effect appears exactly where there is
+something to move and is absent exactly where there is not.
+
+The difficulty row says why. $T_3$ is the hardest task in the sequence to fit
+($47.32$, against $32.58$ for $T_4$ and $2.60$ for $T_2$), and the peak sits on
+it. This is the reading of Section~\ref{sec:results:predictors} appearing on a
+different axis: there the ordering ran over hand-labelled distance levels, here
+over position within a single uninterrupted run of training, with the same
+environments and the same budget. A peak across levels can be attributed to how
+the levels were constructed. A peak across position, inside one sequence,
+cannot.
+
+Two further things replicate rather than emerge. The encoder column repeats the
+dissociation of Section~\ref{sec:results:encoder} over three task switches
+instead of one: fine-tuning, EWC and progressive networks end with $T_1$'s
+reconstruction degraded by factors of $773$, $759$ and $784$, while EWC's RD
+($68.42$) is among the lowest in the table --- it has accumulated three Fisher
+diagonals, and all three are still identically zero on the encoder. And UG-MTM's
+pixel factor is exactly $1.00$ after every stage, for the same reason it is
+across the grid.
+
+We report this as one family, one sequence and five seeds. It closes the gap
+between the formalism and the experiments rather than establishing a new
+result, and the reader should weigh it accordingly: the claim it supports is
+that the mechanism proposed for the $k = 2$ finding also predicts what happens
+at $k = 4$, which is a consistency check, not an independent confirmation from
+new data.
+
 \subsection{Threats to validity}
 \label{sec:results:threats}
 
@@ -368,5 +426,10 @@ seven cells were not rerun. The protocol is declared in the config, recorded in
 every result file, and refused by the runner if two budgets would be averaged
 into one cell.
 
-\textbf{One task switch.} The formalism is stated for $T_1 \ldots T_k$; the
-experiments run $k = 2$.
+\textbf{Sequence length.} The grid runs $k = 2$. One family was additionally
+run at $k = 4$ (Section~\ref{sec:results:sequence}), which is enough to show
+that the account survives a longer sequence and not enough to characterise how
+these methods behave over the ten or twenty tasks a continual learning suite
+would normally use. In particular UG-MTM has four experts, so a four-task
+sequence exhausts its capacity exactly; anything longer would report on that
+limit rather than on the method.

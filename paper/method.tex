@@ -192,7 +192,11 @@ reports where that ranking holds and where it fails.
 
 \begin{table}[t]
   \centering
-  \small
+  % The widest table in the paper: seven columns, two of them environment
+  % names with their physics. Smaller type and tighter columns rather than
+  % \resizebox, which would set this table at a font size nothing else uses.
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
   \input{tables/tab_tasks}
   \caption{The nine cells, read from the stored results rather than from the
   configuration files. $d_{\mathrm{param}}$ is left empty where differencing a

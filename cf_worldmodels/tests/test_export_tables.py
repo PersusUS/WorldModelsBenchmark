@@ -153,7 +153,14 @@ def test_protocol_labels_cover_every_field_the_runner_records():
 def test_task_label_drops_a_scale_of_one_and_keeps_gravity():
     assert task_label({"env_id": "HalfCheetah-v4",
                        "params": {"gravity": 4.0, "mass_scale": 1.0}}) == (
-        r"\texttt{HalfCheetah-v4} ($g=4$)")
+        r"\texttt{HalfCheetah} ($g=4$)")
+
+
+def test_task_label_drops_the_boilerplate_that_overflows_the_page():
+    """Every id in the table carries the same prefix and suffix, and with them
+    the widest row runs past the text width of a one-column article."""
+    assert task_label({"env_id": "MiniGrid-KeyCorridorS3R1-v0"}) == (
+        r"\texttt{KeyCorridorS3R1}")
     assert task_label({"domain_name": "cheetah", "task_name": "run",
                        "params": {}}) == r"\texttt{cheetah/run}"
 
@@ -171,6 +178,6 @@ def test_tasks_table_reads_the_pair_and_both_distances():
     runs = [run("finetuning", "gymnasium", "distance_med", seed,
                 tasks=tasks, d_trans=30.0 + seed) for seed in range(5)]
     table = tasks_table(runs, ["gymnasium"], ["distance_med"])
-    assert r"\texttt{HalfCheetah-v4} ($g=9.8$)" in table
+    assert r"\texttt{HalfCheetah} ($g=9.8$)" in table
     assert "0.586" in table   # d_param, Eq. 8
     assert "32.00" in table   # d_trans, median over the five seeds

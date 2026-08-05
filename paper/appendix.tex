@@ -1,0 +1,110 @@
+% Appendix.
+%
+% The evidence a forgetting benchmark owes but that does not belong in the
+% results: that the task being forgotten was learned, that the budget sits
+% somewhere defensible on the convergence curve, and that the numbers can be
+% reproduced. Tables under tables/ are generated.
+
+\appendix
+
+\section{Was there anything to forget?}
+\label{sec:appendix:quality}
+
+\begin{table}[h]
+  \centering
+  \input{tables/tab_quality}
+  \caption{Task-A quality per cell, measured before any task switch and pooled
+  over methods --- at that point in the protocol every method has trained on
+  task~A and nothing else. \emph{Held-out recon.} is squared error summed over
+  the $3 \times 64 \times 64$ frame on episodes never trained on. The two NLL
+  columns are the transition component's one-step negative log-likelihood on
+  $D_A$ at initialisation and after training, so their difference is what
+  training bought.}
+  \label{tab:quality}
+\end{table}
+
+A forgetting benchmark that has not shown its models learned the first task is
+reporting the distance between two bad models. Table~\ref{tab:quality} is that
+check, for every cell. Training on task~A moves the one-step NLL on $D_A$ from
+the high thirties or low forties to between $10.68$ and $15.65$ in every cell,
+and the held-out reconstruction reaches values that differ by two orders of
+magnitude between the visually simplest cells and the hardest --- which is the
+task-difficulty signal Section~\ref{sec:results:predictors} uses, seen at the
+first task instead of the second.
+
+The one cell that deserves comment is MiniGrid at maximum distance, whose
+held-out reconstruction of task~A is $42.58$ where the other two MiniGrid cells
+are below $1$. Its task~A is FourRooms, which is the hardest environment in that
+family to fit; the model still improves its NLL on $D_A$ by more than a factor
+of two, so there is something learned there to lose, but the pixel-scale
+comparisons in that row are between larger numbers than elsewhere.
+
+\section{Where the budget sits on the convergence curve}
+\label{sec:appendix:budget}
+
+The protocol trains 5000 gradient updates per task. That number was chosen from
+a scaling probe on MiniGrid rather than by default: a single run evaluated at
+1000, 2000, 5000 and 10000 updates takes held-out task-A reconstruction from
+$6.49$ to $3.01$, $1.61$ and $1.37$. The step from 1000 to 5000 removes three
+quarters of the error; the step from 5000 to 10000 removes a further 15\%.
+
+We report that as locating the budget past the steep part of the curve and
+short of its floor, which is what a forgetting benchmark needs --- a model that
+has not converged has less to lose, and one that has fully converged is not the
+regime anybody trains in either. It does not license reading the absolute
+magnitudes as budget-independent, and Section~\ref{sec:results:axis} is the one
+place where we tested the direction of a result against a change of budget
+rather than assuming it.
+
+These four numbers come from a separate probe rather than from the grid, which
+is why they do not appear in a generated table.
+
+\section{Reproducibility}
+\label{sec:appendix:reproducibility}
+
+Every result in this paper is produced by two scripts that train nothing: one
+prints the console summary and one emits the paper's tables in \LaTeX{} by
+importing the first. Every table in the paper carries a header saying it was
+generated. This is not tidiness --- the previous version of this work
+transcribed its tables by hand and they drifted from the runs they claimed to
+describe, and three different sets of protocol values circulated for the same
+experiment.
+
+Runs are reproducible from their seed, and the part that took longest to get
+right was not the framework's global RNG but each environment's own: Gymnasium's
+action space and dm\_control's \texttt{RandomState} are not reached by seeding
+NumPy, and until they were seeded the five seeds of a cell trained on five
+different datasets and were not replicates. All instrumentation is wrapped so
+that measuring cannot perturb a run, which is load-bearing because UG-MTM's gate
+keeps MC-dropout active at evaluation time by design and so consumes the random
+stream. We reproduced a cell bit for bit eight days after it first ran,
+in a different process, after the runner had been rewritten in between.
+
+Each result file records the protocol block it was produced under and the task
+pair it was run on. The runner refuses to reuse a cached result that disagrees
+with either, the loader refuses to aggregate a directory whose runs disagree,
+and the table exporter refuses to emit from one. Those three checks share one
+definition of what makes two results comparable.
+
+\section{Where the measured distance fails}
+\label{sec:appendix:dtrans}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{figures/forgetting_vs_distance}
+  \caption{The same runs as Figure~\ref{fig:axis}, plotted against the measured
+  distance $d_{\mathrm{trans}}$ instead of the labelled level. Compare the
+  x-axis ticks: within each family the three levels sit almost on top of one
+  another, and in DMControl two of the three labels collide. This is
+  Section~\ref{sec:results:predictors}'s point made visually --- the measured
+  distance separates families cleanly and does not resolve the levels inside
+  one.}
+  \label{fig:dtrans}
+\end{figure}
+
+Figure~\ref{fig:dtrans} is the figure this paper would have led with under its
+earlier framing, when $d_{\mathrm{trans}}$ was believed to be the better axis.
+We include it because what it shows now is the opposite of what it was drawn
+for, and because the failure is easier to see than to state: the cells do not
+spread out along the measured axis, and re-sorting them by it is what makes the
+peak of Figure~\ref{fig:axis} invisible.

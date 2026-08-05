@@ -1,0 +1,56 @@
+% Conclusion.
+%
+% Says what was found and what it licenses, and nothing that is not already
+% established in Sections 5 and 6. No number appears here that does not appear
+% in a generated table.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We set out to build the missing instrument --- a benchmark for catastrophic
+forgetting in the transition component of a world model, rather than in a
+policy or in an agent as a whole --- and the instrument's most useful output was
+a correction to two things the field does by default.
+
+The first is a design habit. Continual learning experiments are routinely built
+around an ordinal notion of how far apart the tasks in a sequence are, and that
+ordering is then treated as an experimental factor. Ours does not order
+forgetting: RD peaks at the medium level in all three families, the labelled
+level carries no rank information across the nine cells, and the cleanest case
+needs no comparison between families at all --- one family's maximum level is
+its medium perturbation plus two more, on the same task pair, and it forgets
+less. That survives a doubling of the training budget, a doubling of the seed
+count, and a four-task sequence, and in the one case we could interrogate
+directly the obvious explanation turns out to be backwards: the more heavily
+perturbed task is the \emph{easier} one to fit. What we can say is that
+forgetting tracked what the new task demanded of the model rather than how far
+it sat from the old one. What we cannot yet say is which of the two measurable
+quantities standing in for that demand should be reported, since they swapped
+rank when we added seeds.
+
+The second is a measurement habit. Isolating a component means holding a
+representation fixed, and a metric defined on a fixed representation cannot see
+that representation move. Ours cannot: fine-tuning's held-out reconstruction of
+the first task degrades by a factor of $811$ while its prediction fidelity
+records an improvement. EWC turns that from an artefact into a structural
+prediction --- its Fisher information is identically zero on every encoder
+parameter, so it protects the transition component almost exactly and nothing
+else --- and both halves of the prediction were checkable before the experiment
+ran. A component-level benchmark owes its readers both scales, and ours reports
+them side by side for that reason.
+
+Neither result is about which method wins, and neither is comfortable for the
+method we proposed: UG-MTM does not forget because it freezes its encoder, and
+pays for it in transfer. We report it as one of five characterised methods.
+
+The limits are the ones stated in Section~\ref{sec:results:threats} and we do
+not think they should be read past. This is one architecture family at a small
+budget on data from a random policy, and nothing here establishes what happens
+at the scale world models are actually trained at. The natural next step is not
+a better aggregate or another mitigation method but the same measurements on a
+model somebody would deploy --- and the second is a distance between
+environments that survives contact with its own instrument, which ours does
+not.
+
+Code, configurations, the plotting and table-generating scripts, and all 375
+result files are released.

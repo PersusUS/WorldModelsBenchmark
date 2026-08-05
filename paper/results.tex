@@ -55,19 +55,34 @@ The benchmark was built around an ordinal axis: each family has a minimum, a
 medium and a maximum dynamic distance, and the expectation encoded in that
 design is that forgetting grows along it. It does not.
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/axis_peak}
+  \caption{Forgetting against the labelled distance level, one panel per
+  family, log scale. Coloured lines are the five methods (median over seeds,
+  bars to the seed extremes); the black line is the median over the four
+  methods that share the RSSM architecture, which is what the peak is stated
+  over. \textbf{The peak is at the medium level in all three families}, so the
+  labelled order is wrong in every one of them. UG-MTM is drawn in grey and
+  excluded from the aggregate: it freezes its encoder, which puts it orders of
+  magnitude below the rest in DMControl.}
+  \label{fig:axis}
+\end{figure}
+
 \begin{table}[t]
   \centering
   \input{tables/tab_axis}
-  \caption{Rollout divergence by family and labelled distance level, aggregated
-  over the four methods that share the RSSM architecture (median over methods
-  of each method's median over seeds). Forgetting peaks at the \emph{medium}
-  level in all three families.}
+  \caption{The aggregate of Figure~\ref{fig:axis} as numbers: rollout
+  divergence by family and labelled distance level, over the four methods that
+  share the RSSM architecture (median over methods of each method's median over
+  seeds).}
   \label{tab:axis}
 \end{table}
 
-Table~\ref{tab:axis} gives RD per family and level. In all three families the
-maximum sits at the \emph{medium} level, and the labelled order
-$\text{min} < \text{med} < \text{max}$ is therefore wrong in every one of them.
+Figure~\ref{fig:axis} and Table~\ref{tab:axis} give RD per family and level. In
+all three families the maximum sits at the \emph{medium} level, and the
+labelled order $\text{min} < \text{med} < \text{max}$ is therefore wrong in
+every one of them.
 Three out of three is the most robust part of this result: it does not depend on
 how cells are aggregated, on which of the two forgetting metrics is read, or on
 any threshold.

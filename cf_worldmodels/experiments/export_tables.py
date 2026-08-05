@@ -192,9 +192,19 @@ def protocol_table(runs):
 
 
 def task_label(spec):
-    """`env_id`, or dm_control's `domain/task`, plus the physics it was given."""
+    """`env_id`, or dm_control's `domain/task`, plus the physics it was given.
+
+    The Gym/MiniGrid boilerplate is dropped: every id in the table carries the
+    same `MiniGrid-` prefix and `-v0` suffix, and with them the widest row runs
+    to 138 characters, which overflows the text width of a one-column article
+    even at \\small. The family column already says which suite it is.
+    """
     name = spec.get("env_id") or \
         f"{spec.get('domain_name')}/{spec.get('task_name')}"
+    for prefix in ("MiniGrid-",):
+        name = name[len(prefix):] if name.startswith(prefix) else name
+    for suffix in ("-v0", "-v4", "-v5"):
+        name = name[:-len(suffix)] if name.endswith(suffix) else name
     text = r"\texttt{" + latex_escape(name) + "}"
     params = spec.get("params") or {}
     parts = [label.format(params[key]) for key, label, neutral in PARAM_ROWS
@@ -370,6 +380,43 @@ def method_table(runs, methods, families, distances, key):
     return "\n".join(lines) + "\n"
 
 
+def quality_table(runs, methods, families, distances):
+    """
+    Was there anything to forget? Task-A quality per cell, before any switch.
+
+    A forgetting benchmark has to establish this before any of its numbers mean
+    anything: if the model never learned task A, PF and RD are the distance
+    between two bad models. Pooled over methods, because at this point in the
+    protocol every method has trained on task A and nothing else.
+    """
+    lines = [HEADER, r"\begin{tabular}{llrrr}", r"\toprule",
+             r"Family & Level & Held-out recon. & NLL at init & NLL after A \\",
+             r"\midrule"]
+    previous = None
+    for family in families:
+        for distance in distances:
+            recon, at_init, after = [], [], []
+            for method in methods:
+                recon += list(cell_values(
+                    runs, method, family, distance,
+                    "heldout_reconstruction_A_after_task_A").values())
+                at_init += list(cell_values(runs, method, family, distance,
+                                            "nll_A_random_init").values())
+                after += list(cell_values(runs, method, family, distance,
+                                          "nll_A_after_task_A").values())
+            if not recon:
+                continue
+            name = family_cell(lines, family, previous)
+            previous = family
+            lines.append(
+                f"{name} & {LEVEL_LABEL[distance]} & "
+                + fmt(float(np.median(recon))) + " & "
+                + (fmt(float(np.median(at_init))) if at_init else "--") + " & "
+                + (fmt(float(np.median(after))) if after else "--") + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
+
+
 def sequence_table(runs, methods, task=0):
     """
     Retention of one task as a sequence of k tasks goes on (D22/R20).
@@ -464,6 +511,7 @@ def main(argv=None):
         "pf": method_table(runs, methods, families, distances, "pf"),
         "rd": method_table(runs, methods, families, distances, "rd"),
         "ft": method_table(runs, methods, families, distances, "ft"),
+        "quality": quality_table(runs, methods, families, distances),
     }
 
     # Optional: the k>2 runs live in their own directory under their own

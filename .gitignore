@@ -41,9 +41,17 @@ full_benchmark_output.txt
 .claude/
 
 # --- Working notes ---
-# Internal development log: findings, decisions, run history. Not part of the
-# published artifact.
-_devlog/
+# Internal development log. The documents themselves are tracked: findings,
+# decisions, run history, and the scripts that check the paper. What stays out
+# is the bulk and the noise -- archived results from invalidated runs, the
+# stdout/stderr of every run, and the summary dumps, which regenerate.
+_devlog/*
+!_devlog/*.md
+!_devlog/check-paper.py
+!_devlog/check-numbers.py
+!_devlog/diagnose-p12.py
+!_devlog/backfill-tasks.py
+!_devlog/run-seeds-5-9.sh
 
 # --- OS / editor ---
 .DS_Store

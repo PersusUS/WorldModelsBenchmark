@@ -37,8 +37,11 @@ report medians throughout and mark the skewed cells ($\ast$) rather than
 averaging the tail away.
 
 PF and RD are reported separately. The aggregate WMF of the earlier
-formulation is dominated by RD, which supplies 78--97\% of it, so a single
-scalar would be RD with extra steps. Comparisons between methods are paired by
+formulation is dominated by RD, which supplies a median of $88.5\%$ of it and at
+least three quarters of it in 37 of the 45 cells, so a single scalar would be RD
+with extra steps. The exceptions are informative rather than reassuring: they
+are the cells where RD is itself near zero --- DMControl's control cell, and
+every DMControl cell of the method that freezes its encoder. Comparisons between methods are paired by
 seed and tested with an exact two-sided permutation test over all $2^n$ sign
 flips, alongside the paired effect size $d_z$ and the win count. We do not
 report parametric $p$-values. The seed count matters for what those tests can
@@ -98,16 +101,17 @@ The obvious objection is that this is a statement about our budget rather than
 about forgetting: if at the maximum level the model never fits task~B, nothing
 gets overwritten and the cell reads low for an uninteresting reason. We tested
 it by rerunning both cells at twice the training budget, and it does not hold
-up. The ordering survives --- restricted to fine-tuning, so that the two budgets
-are compared on the same estimator, the cells read $118.04$ (medium) against
-$60.18$ (maximum) at 5000 updates and $144.70$ against $102.18$ at 10000 --- and
-the mechanism the objection proposes is the opposite of what happens. Task~B is
+up. The ordering survives --- restricted to fine-tuning and to the five seeds
+both budgets share, so that the two are compared on the same estimator, the
+cells read $118.04$ (medium) against $58.79$ (maximum) at 5000 updates and
+$144.70$ against $102.18$ at 10000 --- and the mechanism the objection proposes
+is the opposite of what happens. Task~B is
 \emph{easier} to fit at the maximum level than at the medium one, at both
 budgets ($17.44$ against $27.28$, and $15.14$ against $24.65$): the heavier,
 lower-friction, low-gravity cheetah moves less, and a less varied task is a
 task with less to learn from. What we report as robust is the direction, which
 survives the doubling; the magnitude is budget-dependent, the ratio between the
-two cells falling from $1.96$ to $1.42$.
+two cells falling from $2.01$ to $1.42$.
 
 The aggregate in Table~\ref{tab:axis} deliberately excludes UG-MTM. It freezes
 its encoder, which puts its RD three orders of magnitude below the other four
@@ -197,7 +201,7 @@ should not depend on how long one trains the models used to measure it.
 Not every cell has something to forget. We call a cell a \emph{control} when no
 method's held-out task-A reconstruction error grows by more than 10\% after
 training on task~B. The threshold is not a knife edge: in every cell that does
-produce forgetting, the worst method ends between $15\times$ and $848\times$ its
+produce forgetting, the worst method ends between $14.8\times$ and $848\times$ its
 original error, so the nearest one sits more than $13\times$ above the threshold
 and any cutoff between $1.1$ and $14$ selects the same three cells.
 

@@ -1,14 +1,11 @@
 # Plan para rehacer el paper — y valoración honesta
 
-Estado: **escrito de principio a fin** (sesión 9). Abstract, introducción,
-trabajo relacionado, método, resultados y discusión, más `main.tex`, con las
-ocho tablas generadas por `experiments/export_tables.py`. Nunca compilado: no
-hay toolchain de LaTeX en esta máquina.
+Estado: **escrito, verificado y compilado.** Las ocho secciones más `main.tex`,
+con las diez tablas generadas por `experiments/export_tables.py`. La pasada de
+números se hizo en la sesión 10 y encontró cuatro erratas, ya corregidas. El PDF
+compilado son **26 páginas** y está en `paper/WMF.pdf`.
 
-**Lo que queda no es redactar.** Es (a) la pasada de números cuando termine R19,
-(b) los pasos 3 y 4 del plan de cómputo de D20, y (c) compilarlo.
-
-Última actualización: 3 ago 2026 (sesión 9: paper escrito, D19–D21, R18, F28–F29).
+Última actualización: 8 ago 2026 (sesión 11: PDF compilado en el repo).
 
 ---
 
@@ -51,7 +48,7 @@ escritura 8 · contribución de método 3 (irrelevante por D8/D19).
    dura». **Añadido a amenazas a la validez en la sesión 9.**
 3. **k = 2.** Paso 3 de D20, no ejecutado.
 
-Referencia: `main (5).pdf`, 9 jul 2026, "Catastrophic Forgetting in World Model
+Referencia: `_devlog/archive/paper-anterior-main5.pdf`, 9 jul 2026, "Catastrophic Forgetting in World Model
 Transition Components: A Benchmark and Structural Mitigation".
 
 ---

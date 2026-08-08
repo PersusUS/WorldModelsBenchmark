@@ -1,4 +1,4 @@
-# Paper (`main (5).pdf`, 9 jul 2026) vs. código y datos
+# Paper (`_devlog/archive/paper-anterior-main5.pdf`, 9 jul 2026) vs. código y datos
 
 Contrastado contra `src/`, `experiments/` y los `metrics.json`.
 

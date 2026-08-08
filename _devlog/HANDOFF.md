@@ -95,7 +95,7 @@ autor, es uno de los cinco métodos evaluados, no el resultado. Que gane o pierd
 no compromete el paper. Criterio de éxito: ¿discrimina el benchmark entre métodos
 de forma estable, interpretable y reproducible?
 
-**Autor:** Jesús Pérez Bazarot. Paper previo: `main (5).pdf` (9 jul 2026),
+**Autor:** Jesús Pérez Bazarot. Paper previo: `_devlog/archive/paper-anterior-main5.pdf` (9 jul 2026),
 "Catastrophic Forgetting in World Model Transition Components: A Benchmark and
 Structural Mitigation". **Hay que rehacerlo** — ver `paper-plan.md`, que incluye
 una valoración honesta de viabilidad.
@@ -1058,7 +1058,14 @@ c13a5dd  Fix the Gaussian KL used by RD and d_trans
 179e3fe  WMF benchmark for catastrophic forgetting in world models
 ```
 
-Sin versionar: `main (5).pdf`, el paper viejo, deliberadamente fuera del repo.
+**El paper compilado vive en `paper/WMF.pdf`** (26 páginas, 8 ago 2026), junto a
+las fuentes que lo producen. Lleva las cuatro correcciones de la sesión 10
+—comprobado: 88.5, 58.79, 2.01 y 14.8 están; 78–97, 1.96 y 15× no—, así que es
+posterior a ellas.
+
+El PDF de la versión anterior e inválida ya no está en la raíz: se archivó en
+`_devlog/archive/paper-anterior-main5.pdf`, fuera de git, porque sigue siendo la
+referencia de `paper-vs-code.md` y no debía perderse al sustituirlo.
 
 **`paper/` sí se versiona** (decisión de la sesión 8, y es reversible con un
 `git mv`): es fuente nueva, y viaja con el código que genera sus tablas. Lo que

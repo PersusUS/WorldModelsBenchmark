@@ -1235,3 +1235,28 @@ páginas** sin referencias, contra 7,38 antes: **~1 página de margen**.
 objeción no ahorra lo que ocupa, porque la objeción vuelve y hay que declararla.
 Lo que ahorra de verdad es material redundante — una tabla cuyos números ya
 están en el texto.
+
+---
+
+## Sesión 15 — El subdirectorio se va, y con él tres fallos
+
+La versión corta **compila en Overleaf con su bibliografía**. Lo que hizo falta
+no fue un arreglo más, sino deshacer la decisión que los causaba: estaba en
+`paper/workshop/` porque quedaba ordenado.
+
+Overleaf compila **desde la raíz del proyecto**, no desde la carpeta del fichero
+principal, y de ahí salieron tres fallos seguidos: los `\input{../tables/…}`
+apuntaban fuera del proyecto, con dos `main.tex` no elegía el correcto, y la
+bibliografía no aparecía. Los dos primeros los parcheé con un prefijo
+autodetectado (`\wmfroot`); el tercero demostró que el parche no valía, porque
+el nombre del `.bib` llega a **bibtex**, que no expande macros de LaTeX ni abre
+rutas que salgan del directorio de compilación.
+
+`paper/workshop/main.tex` pasa a **`paper/main_workshop.tex`**, junto a
+`refs.bib`, `tables/` y `figures/`. Todas las rutas quedan planas, el prefijo
+desaparece, y la cabecera del fichero dice que no lo devuelvan a un
+subdirectorio y por qué.
+
+**Lección:** tres síntomas distintos con la misma causa no piden tres parches,
+piden quitar la causa. Lo propuse al segundo fallo y seguí parcheando; debí
+moverlo entonces.

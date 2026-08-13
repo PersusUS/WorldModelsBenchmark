@@ -1,7 +1,7 @@
 # WMF Benchmark — Traspaso
 
 Documento autocontenido para retomar el proyecto en una sesión nueva.
-Última actualización: **14 ago 2026, fin de sesión 14 — la versión corta compila en Overleaf y cabe con margen. Solo queda enviar.**
+Última actualización: **14 ago 2026, fin de sesión 15 — la versión corta compila con bibliografía. Solo queda enviar.**
 
 > **Lectura mínima para arrancar:** §0 (estado), §1 (qué es), §3 (el paper) y
 > §4 (qué hacer ahora). El resto es referencia que se consulta, no se lee.
@@ -14,7 +14,7 @@ Documento autocontenido para retomar el proyecto en una sesión nueva.
 referencias, no archival, notificación el 29 sep, taller el 11–12 dic en
 Sídney. Pide explícitamente *negative results* y *benchmarks*, y entre sus
 temas están «catastrophic forgetting» y «continual learning for … world
-models». **La versión de 8 páginas ya está escrita** (`paper/workshop/main.tex`,
+models». **La versión de 8 páginas ya está escrita** (`paper/main_workshop.tex`,
 §3). Segundo destino posible el mismo fin de semana: **Continual World Models**
 (CWM), deadline 30 ago, cuyas bases aún no estaban publicadas al cierre de esta
 sesión.
@@ -45,7 +45,7 @@ de hoy.
 - **El paper está completo y compilado**: nueve secciones más `main.tex`, con
   **diez tablas generadas** por `experiments/export_tables.py`, y el PDF de 26
   páginas en `paper/WMF.pdf`. Al lado, **la versión de 8 páginas** para el
-  taller, en `paper/workshop/main.tex`. Ver §3.
+  taller, en `paper/main_workshop.tex`. Ver §3.
 - **El título ya no promete el método**: «Forgetting in World Models Does Not
   Follow Task Distance: A Component-Level Benchmark and Two Negative Results».
   Es una elección, no un dato; cambiarlo es una línea de cada `main.tex`.
@@ -452,7 +452,7 @@ dónde.
 
 **Lo único no hecho es compilar.** No hay LaTeX en esta máquina.
 
-### La versión de 8 páginas (`paper/workshop/main.tex`)
+### La versión de 8 páginas (`paper/main_workshop.tex`)
 
 Para **CL4FMAgents @ NeurIPS 2026** (deadline 29 ago 2026 AoE, 8 páginas sin
 referencias, no archival). Es un **documento aparte**, no una variante del
@@ -483,24 +483,30 @@ Quedan la figura del pico y **dos tablas**: eje y predictores. Estimación
 que devolvería es la tabla del codificador: es la evidencia visual del segundo
 hallazgo.
 
-### Tres trampas de Overleaf, ya resueltas
+### Overleaf: la lección, ya cobrada
 
-Overleaf compila **desde la raíz del proyecto**, no desde la carpeta del fichero
-principal. Con `paper/` subida entera eso rompía la versión corta:
+**El documento corto vive en `paper/main_workshop.tex`, junto a `refs.bib`,
+`tables/` y `figures/`. No lo devuelvas a un subdirectorio.**
 
-1. **Rutas.** `../tables/…` salía fuera del proyecto. Resuelto con un prefijo
-   que se autodetecta: `\IfFileExists{tables/tab_axis.tex}` decide si
-   `\wmfroot` es vacío o `../`, así que **el mismo fichero compila desde
-   `paper/` y desde `paper/workshop/`** sin duplicar las tablas.
-2. **Documento principal.** Hay dos `main.tex` y Overleaf elige uno solo.
-   Menu → Settings → Main document → `workshop/main.tex`.
-3. **La bibliografía no salía.** `ibliography{\wmfroot refs}` no funciona:
-   ese nombre llega a **bibtex**, que no expande macros de LaTeX ni abre rutas
-   que salgan del directorio de compilación. Es `ibliography{refs}`, correcto
-   siempre que se compile desde `paper/` — que es lo que hace Overleaf.
+Empezó en `paper/workshop/` porque quedaba más ordenado, y esa decisión costó
+**tres fallos de compilación seguidos**, todos síntomas de lo mismo: Overleaf
+compila **desde la raíz del proyecto**, no desde la carpeta del fichero
+principal.
 
-`check-paper.py` sigue el macro y prueba cada expansión antes de dar por rota
-una ruta, así que no protesta por el prefijo.
+1. **Rutas.** Los `input{../tables/…}` salían fuera del proyecto.
+2. **Documento principal.** Con dos `main.tex`, Overleaf no elegía el correcto
+   por su cuenta.
+3. **La bibliografía no aparecía.** Y esta no se arreglaba con un prefijo: el
+   nombre del `.bib` llega a **bibtex** por el `.aux`, y bibtex no expande
+   macros de LaTeX ni abre rutas que salgan del directorio de compilación.
+
+Los dos primeros los parcheé con un prefijo autodetectado; el tercero demostró
+que el parche no era la solución. Moviendo el fichero desaparecen los tres:
+todas las rutas son planas y relativas al directorio desde el que compilan
+tanto Overleaf como una corrida local. **Compila, y las referencias salen.**
+
+En Overleaf: subir `paper/` y fijar Menu → Settings → Main document →
+`main_workshop.tex`.
 
 ### Trampas al escribir (todas se han pisado ya una vez)
 
@@ -551,10 +557,11 @@ del autor: quitarlo es borrar una subsección.
 
 **Por orden, y con fecha encima.**
 
-1. **Recompilar la versión corta y confirmar el margen.** Compiló a 8 páginas
-   antes de los dos recortes; la estimación tras ellos es **6,97**. Sigue sin
-   haber LaTeX en esta máquina: se compila en Overleaf, subiendo `paper/` y
-   fijando `workshop/main.tex` como documento principal.
+1. **Confirmar el número de páginas.** La versión corta ya compila en Overleaf
+   con su bibliografía. Compilaba a 8 páginas *antes* de los dos recortes; la
+   estimación tras ellos es **6,97** y está sin confirmar. Sigue sin haber
+   LaTeX en esta máquina: se compila subiendo `paper/` a Overleaf y fijando
+   `main_workshop.tex` como documento principal.
 
    ```bash
    cd C:/Users/Usuario/WorldModelsBenchmark && python _devlog/check-paper.py

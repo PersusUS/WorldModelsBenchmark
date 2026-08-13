@@ -196,7 +196,10 @@ reports where that ranking holds and where it fails.
   % names with their physics. Smaller type and tighter columns rather than
   % \resizebox, which would set this table at a font size nothing else uses.
   \footnotesize
-  \setlength{\tabcolsep}{4pt}
+  % 3pt, not 4: at 4pt the seven columns overrun the text block by 2.2pt, and
+  % the compiled PDF shows it as booktabs rules poking past the right margin.
+  % Each point removed here buys 12pt across the six inter-column gaps.
+  \setlength{\tabcolsep}{3pt}
   \input{tables/tab_tasks}
   \caption{The nine cells, read from the stored results rather than from the
   configuration files. $d_{\mathrm{param}}$ is left empty where differencing a

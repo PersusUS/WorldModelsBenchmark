@@ -69,7 +69,11 @@ def main():
     if not sections:
         raise SystemExit(f"no .tex under {PAPER}")
 
-    bodies = {p.name: strip_comments(p.read_text(encoding="utf-8"))
+    # Keyed by path relative to paper/, not by name: there is more than one
+    # main.tex once a shortened version lives in a subdirectory, and keying by
+    # name silently drops one of them.
+    bodies = {p.relative_to(PAPER).as_posix():
+              strip_comments(p.read_text(encoding="utf-8"))
               for p in sections}
     everything = "\n".join(bodies.values())
 
@@ -84,16 +88,27 @@ def main():
         check_math(name, text, problems)
         check_environments(name, text, problems)
 
+        # Paths resolve against the directory of the file that writes them,
+        # the way LaTeX resolves them -- a document in paper/workshop/ says
+        # ../tables/tab_axis and is right to.
+        here = (PAPER / name).parent
+
         for target in re.findall(r"\\input\{([^}]*)\}", text):
-            if not (PAPER / f"{target}.tex").exists():
+            if not (here / f"{target}.tex").exists():
                 problems.append(f"{name}: \\input{{{target}}} has no file")
         # \includegraphics is normally written without an extension so LaTeX
-        # can pick pdf over png; accept the file under any of them.
+        # can pick pdf over png; accept the file under any of them. Search the
+        # file's own directory and every \graphicspath it declares.
+        roots = [here] + [here / p for group in
+                          re.findall(r"\\graphicspath\{(.*?)\}\s*$",
+                                     text, re.MULTILINE)
+                          for p in re.findall(r"\{([^}]*)\}", group)]
         for target in re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]*)\}",
                                  text):
-            stem = PAPER / target
-            if not (stem.exists() or any(stem.with_suffix(s).exists()
-                                         for s in (".pdf", ".png", ".jpg"))):
+            stems = [root / target for root in roots]
+            if not any(stem.exists() or any(stem.with_suffix(s).exists()
+                                            for s in (".pdf", ".png", ".jpg"))
+                       for stem in stems):
                 problems.append(f"{name}: \\includegraphics{{{target}}} "
                                 "has no file")
         for ref in re.findall(r"\\(?:eq)?ref\{([^}]*)\}", text):

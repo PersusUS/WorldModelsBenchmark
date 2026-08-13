@@ -441,6 +441,22 @@ dónde.
 
 **Lo único no hecho es compilar.** No hay LaTeX en esta máquina.
 
+### La versión de 8 páginas (`paper/workshop/main.tex`)
+
+Para **CL4FMAgents @ NeurIPS 2026** (deadline 29 ago 2026 AoE, 8 páginas sin
+referencias, no archival). Es un **documento aparte**, no una variante del
+largo: 12.306 palabras no sobreviven como subconjunto de 3.600, así que está
+reescrito. Lo que sí es idéntico son las cifras y las tablas — hace `\input` de
+las mismas `../tables/`.
+
+Qué se cayó, y dónde va el lector: trabajo relacionado (a un párrafo de §1) ·
+las ecuaciones de las métricas (descritas en palabras) · las tablas por método
+de PF/RD/FT (al paper largo) · k=4 (dos frases) · amenazas a la validez (a
+§4.4) · el relato de la versión superada (a un párrafo de §1).
+
+Se conservan la figura del pico y tres tablas: eje, predictores y codificador.
+Estimación **7,3–7,6 páginas** sin referencias; no compilado.
+
 ### Trampas al escribir (todas se han pisado ya una vez)
 
 - **Ninguna cifra a mano.** `export_tables.py` para las tablas,

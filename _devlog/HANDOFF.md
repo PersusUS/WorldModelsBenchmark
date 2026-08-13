@@ -1,45 +1,47 @@
 # WMF Benchmark — Traspaso
 
 Documento autocontenido para retomar el proyecto en una sesión nueva.
-Última actualización: **4 ago 2026, fin de sesión 10 — paper completo y verificado cifra a cifra. Cuatro correcciones aplicadas.**
+Última actualización: **12 ago 2026, fin de sesión 12 — repositorio público, PDF revisado, y la versión de 8 páginas escrita para CL4FMAgents.**
 
 > **Lectura mínima para arrancar:** §0 (estado), §1 (qué es), §3 (el paper) y
 > §4 (qué hacer ahora). El resto es referencia que se consulta, no se lee.
 
-## 0. Estado en una pantalla (4 ago 2026)
+## 0. Estado en una pantalla (12 ago 2026)
 
-**El paper está escrito de principio a fin, y sus cifras están al día con las
-375 celdas.** R19 terminó el 4 ago; las ocho tablas están regeneradas y la
-pasada de números hecha con `_devlog/check-numbers.py`.
+**No queda trabajo de investigación. Queda enviar, y hay una fecha.**
 
-**F27 aguanta a diez semillas** y la etiqueta baja de +0.05 a **+0.00**. El
-gasto compró lo que buscaba: cuatro celdas alcanzan **p = 0.0020**.
+**Deadline: 29 ago 2026 AoE — CL4FMAgents @ NeurIPS 2026.** Ocho páginas sin
+referencias, no archival, notificación el 29 sep, taller el 11–12 dic en
+Sídney. Pide explícitamente *negative results* y *benchmarks*, y entre sus
+temas están «catastrophic forgetting» y «continual learning for … world
+models». **La versión de 8 páginas ya está escrita** (`paper/workshop/main.tex`,
+§3). Segundo destino posible el mismo fin de semana: **Continual World Models**
+(CWM), deadline 30 ago, cuyas bases aún no estaban publicadas al cierre de esta
+sesión.
 
-**Corriendo ahora: R20, k=4 en MiniGrid** (D22, paso 3 de D20) — 100
-entrenamientos, ~9 h, en `results-seq/`. Reanudable con
-`python experiments/run_sequence.py`.
+**El repositorio es público**: https://github.com/PersusUS/WorldModelsBenchmark
+— una sola rama `main`, descripción y trece topics. La bitácora viaja dentro
+(los `.md` y los scripts; fuera quedan `archive/`, logs y volcados
+regenerables).
 
-Del plan de D20 solo quedaría el paso 4, **el arreglo de `d_trans`**
-(F28/F29), y la recomendación es **no hacerlo**: ya está declarado como fallido
-en el paper y arreglar un instrumento secundario no mueve la valoración.
-
-**Y el paper ya no se anuncia como banco de pruebas, sino como hallazgo**
-(D19). El banco es el instrumento. El titular es F27 + F18/F21. Consecuencia
-inmediata: **hay que cambiar el título**, que todavía promete UG-MTM.
+**Revisado el PDF compilado**, que nadie había mirado. Las 26 páginas tienen
+todo el texto dentro de la caja y nueve de las diez tablas también; **la Tabla 1
+se salía 2,2 pt** y está corregida en el `.tex` (relleno de columna 4 pt → 3 pt).
+**Sin recompilar**: `paper/WMF.pdf` conserva el desborde.
 
 - **375 celdas ejecutadas y commiteadas.** 75 parejas de referencia, 0 pasos con
   NaN, un solo protocolo (5000 pasos), cada resultado con su par de tareas.
   Diez semillas en las seis celdas que discriminan, cinco en los tres controles
   (D21).
-- **El paper está completo en borrador**: abstract, introducción, trabajo
-  relacionado, método, resultados y discusión, más `main.tex` con el preámbulo,
-  y **ocho tablas generadas** por `experiments/export_tables.py`. Nunca se ha
-  compilado (no hay toolchain aquí). Ver §3.
+- **El paper está completo y compilado**: nueve secciones más `main.tex`, con
+  **diez tablas generadas** por `experiments/export_tables.py`, y el PDF de 26
+  páginas en `paper/WMF.pdf`. Al lado, **la versión de 8 páginas** para el
+  taller, en `paper/workshop/main.tex`. Ver §3.
 - **El título ya no promete el método**: «Forgetting in World Models Does Not
   Follow Task Distance: A Component-Level Benchmark and Two Negative Results».
-  Es una elección, no un dato; cambiarlo es una línea de `main.tex`.
-- **El trabajo vive en la rama `session-7-benchmark-decisions`**, árbol limpio.
-  `main` no se ha tocado.
+  Es una elección, no un dato; cambiarlo es una línea de cada `main.tex`.
+- **Una sola rama, `main`**, en local y en el remoto, árbol limpio. La rama de
+  sesión se fusionó por fast-forward y se borró.
 - **El hallazgo principal es F27** y no es sobre métodos: el olvido hace pico en
   el nivel intermedio en las tres familias, así que el eje `min/med/max` no
   acierta el orden en ninguna. Sobrevive al cambio de agregación **y al doble de
@@ -504,21 +506,33 @@ del autor: quitarlo es borrar una subsección.
 
 ## 4. Qué hacer en la sesión siguiente
 
-**El paper está escrito, verificado y sin decisiones abiertas.** Todo lo que
-sigue es opcional, y el orden de abajo es el que recomiendo.
+**Por orden, y con fecha encima.**
 
-1. **Compilarlo.** Es lo único no hecho, y no se ha podido hacer aquí: no hay
-   toolchain de LaTeX en esta máquina. Requiere `booktabs`. Hasta entonces la
-   única red es la comprobación estructural, que no ve desbordes de caja,
-   flotantes descolocados ni tablas más anchas que la página — y hay tablas de
-   siete columnas.
+1. **Compilar las dos versiones.** Sigue sin haber LaTeX aquí, y ahora hay dos
+   cosas que dependen de ello: el arreglo de la Tabla 1 en el paper largo, y
+   saber si la versión corta cabe de verdad en ocho páginas (estimación
+   7,3–7,6, sin comprobar). Requiere `booktabs`.
 
    ```bash
    cd C:/Users/Usuario/WorldModelsBenchmark && python _devlog/check-paper.py
    ```
 
-2. **Volver a pasar los números si se toca `results/`.** El orden importa:
-   regenerar tablas primero, clasificar después, y comprobar las CHECK a mano.
+   Si la corta se pasa, lo que sobra por orden de menor daño: §3.6 (la
+   secuencia k=4), y después la tabla del codificador, que se puede contar en
+   prosa.
+
+2. **Enviar a CL4FMAgents antes del 29 ago AoE.**
+   `https://openreview.net/group?id=NeurIPS.cc/2026/Workshop/CL4FMAgents`
+   Al ser no archival no quema el paper para una sede archival después.
+
+3. **Mirar si CWM publicó bases** (deadline 30 ago). Encaja por título mejor
+   que ninguno; al cierre de la sesión 12 su web no daba páginas ni formato.
+
+4. **Después: CoLLAs 2027**, que es archival y la sede natural del tema.
+   Deadline sin anunciar; por los años anteriores, finales de febrero.
+
+5. **Volver a pasar los números si se toca `results/`.** El orden importa:
+   regenerar tablas primero, clasificar después, comprobar las CHECK a mano.
 
    ```bash
    cd C:/Users/Usuario/WorldModelsBenchmark/cf_worldmodels && python experiments/export_tables.py
@@ -527,10 +541,6 @@ sigue es opcional, y el orden de abajo es el que recomiendo.
    ```bash
    cd C:/Users/Usuario/WorldModelsBenchmark && python _devlog/check-numbers.py
    ```
-
-3. **Elegir dónde se manda.** `paper-plan.md` dice workshop, y esa valoración es
-   de antes de que existieran F27 y el resultado del codificador. Merece
-   revisarse con el paper delante.
 
 ### Se puede hacer sin decisiones, y ninguna es necesaria
 
@@ -1024,54 +1034,22 @@ Detalle en `decisions.md`.
 
 ## 12. Estado del repositorio
 
-**Las sesiones 7 a 10 viven en la rama `session-7-benchmark-decisions`**, **29
-commits** por encima de `main`, árbol limpio. `main` no se ha tocado; para
-adelantarla:
+**Una sola rama: `main`**, en local y en `origin`, árbol limpio. La rama
+`session-7-benchmark-decisions` llevaba las sesiones 7 a 11; el 12 ago se
+fusionó por fast-forward (31 commits, 0 divergencia, sin merge commit) y se
+borró en los dos lados. **El repositorio es público** desde esa misma fecha.
 
-```bash
-git checkout main && git merge --ff-only session-7-benchmark-decisions
-```
+Los ocho commits más recientes:
 
 ```
+65022d8 Add the eight-page version, and teach the checker about subdirectories
+6847426 Pull Table 1's columns in by a point so its rules stay in the block
+b95037f Add the compiled paper, and archive the version it replaces
+489ae5c Track the development log, minus the bulk and the noise
 f199849 Correct four numbers the ten-seed pass had left behind
 d86ae18 Give the paper a conclusion, a figure, and an appendix
 5609a5e Write the k=4 sequence into the paper, with a generator behind it
 f8cfa55 Add the k=4 sequence run: 25 runs, four tasks each
-4810bd8 Run the benchmark over a sequence, not just a pair
-93809f5 Print the per-cell seed counts even when the protocols disagree
-5564a4b Ten seeds in the six discriminating cells, and the numbers pass
-0755816 Name the confound between the predictor and the outcome
-0a2f5da Write the abstract and introduction, and give the paper a root file
-c739e2a Add the 2x budget probe: 10 cells, 10 reference pairs
-075e7a9 Read the budget probe: the peak holds, d_trans does not
-1a16817 Write related work, and point it at the practice the paper amends
-aecdd56 Put the results-directory checks where every reader inherits them
-d761d6e Say in the discussion what d_trans is scored in
-49aad4e Generate the protocol and task tables, and write the method around them
-f1d5b01 Write the discussion around what the distance axis turned out to be
-c79df6b Write the results section around the distance-axis finding
-662c7a7 Withdraw PIS instead of reporting it as a zero
-488aa58 Report cells by median and range, and let the tables grade the distance axis
-e4b000b Read the finished run: forgetting does not follow the distance axis
-4b23e8d Add the full benchmark run: 225 cells, 45 reference pairs
-32e8208 Record which tasks each result came from
-079279a Check both tasks' action widths before training anything
-e96b1ce Run each family in a process of its own
-b9af5f7 Collect each cell's rollouts once instead of six times
-c1e53a7 Plot PF and RD against the measured distance
-abce857 Measure forward transfer and d_trans against one-task models
-f67a81b Give dm_control's minimum-distance pair two different tasks
-53e7601 Estimate EWC's Fisher from per-sample gradients
-```
-
-Y los cinco de `main`:
-
-```
-cf70277  Record what each run learned and the protocol it ran under
-c31d84f  Keep the ThresholdNet write cursor in the state dict
-3816567  Make benchmark runs reproducible from their seed
-c13a5dd  Fix the Gaussian KL used by RD and d_trans
-179e3fe  WMF benchmark for catastrophic forgetting in world models
 ```
 
 **El paper compilado vive en `paper/WMF.pdf`** (26 páginas, 8 ago 2026), junto a

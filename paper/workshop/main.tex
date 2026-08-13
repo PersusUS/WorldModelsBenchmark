@@ -15,7 +15,15 @@
 %   - Threats to validity as a section-> Section 4.4
 %   - The superseded version's account-> one paragraph in Section 1
 %
-% Compile with:  pdflatex main && bibtex main && pdflatex main && pdflatex main
+% Compile FROM paper/, not from this directory, so that bibtex can open
+% refs.bib -- it refuses paths that climb out of the compile directory, and
+% \wmfroot below cannot help it because bibtex does not expand LaTeX macros:
+%
+%   cd paper && pdflatex workshop/main && bibtex workshop/main \
+%     && pdflatex workshop/main && pdflatex workshop/main
+%
+% Overleaf already compiles from the project root, so uploading paper/ and
+% setting workshop/main.tex as the main document is the same thing.
 
 \documentclass[11pt]{article}
 
@@ -458,6 +466,11 @@ ones. A cell re-executed eight days after its original run reproduced to the
 fourth decimal.
 
 \bibliographystyle{plainnat}
-\bibliography{\wmfroot refs}
+% Not \wmfroot here. The prefix is for LaTeX, which expands macros; this name
+% reaches bibtex through the .aux file, and bibtex refuses to open a path that
+% climbs out of the compile directory. Compiling from paper/ -- which is what
+% Overleaf does, and what the header tells a local build to do -- makes the
+% bare name correct and leaves the .bib single-sourced.
+\bibliography{refs}
 
 \end{document}

@@ -11,7 +11,7 @@
 %   - Related work as a section       -> one paragraph in Section 1
 %   - Metric equations                -> named and characterised in words
 %   - Per-method PF/RD/FT tables      -> the full paper
-%   - The k=4 sequence result         -> two sentences, Section 3.6
+%   - The k=4 sequence result         -> the full paper (cut for length)
 %   - Threats to validity as a section-> Section 4.4
 %   - The superseded version's account-> one paragraph in Section 1
 %
@@ -361,14 +361,6 @@ overconfident, with some latent dimensions collapsing to $\sigma = 0.007$ and
 the rollout KL already at $80$ at step~0. Confident and wrong is a failure mode
 an unbounded divergence surfaces and a mean hides.
 
-\subsection{The same shape along a sequence}
-\label{sec:results:sequence}
-
-Two tasks are a thin reading of ``continual''. We reran MiniGrid as a four-task
-sequence, and forgetting of the first task peaks at an intermediate stage there
-too rather than growing with sequence position --- the same shape the distance
-axis showed, on a different axis.
-
 \section{Discussion}
 \label{sec:discussion}
 
@@ -429,7 +421,11 @@ The binding constraint is statistical resolution: at ten seeds the exact paired
 test floors at $p \approx 0.002$, and the three control cells remain at five,
 where the floor is $0.0625$. The grid is nine cells of which six discriminate,
 and one architecture family --- every method here is a variation on the same
-recurrent latent world model, so the results speak to that class. The budget
+recurrent latent world model, so the results speak to that class. The
+experiments reported here run \emph{one} task switch, which is a thin reading of
+``continual''; a four-task MiniGrid sequence, reported in full elsewhere, shows
+the same intermediate peak along sequence position rather than a monotone
+increase, but that is one family and one sequence. The budget
 (20 random-policy episodes per task, 5000 updates, latent dimension 32) is
 small enough that absolute magnitudes are budget-dependent, though task~A is
 demonstrably learned at this scale and the central finding survives doubling

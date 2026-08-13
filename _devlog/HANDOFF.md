@@ -1,7 +1,7 @@
 # WMF Benchmark — Traspaso
 
 Documento autocontenido para retomar el proyecto en una sesión nueva.
-Última actualización: **14 ago 2026, fin de sesión 13 — PDF recompilado y verificado, README reescrito. Solo queda enviar.**
+Última actualización: **14 ago 2026, fin de sesión 14 — la versión corta compila en Overleaf y cabe con margen. Solo queda enviar.**
 
 > **Lectura mínima para arrancar:** §0 (estado), §1 (qué es), §3 (el paper) y
 > §4 (qué hacer ahora). El resto es referencia que se consulta, no se lee.
@@ -462,11 +462,45 @@ las mismas `../tables/`.
 
 Qué se cayó, y dónde va el lector: trabajo relacionado (a un párrafo de §1) ·
 las ecuaciones de las métricas (descritas en palabras) · las tablas por método
-de PF/RD/FT (al paper largo) · k=4 (dos frases) · amenazas a la validez (a
-§4.4) · el relato de la versión superada (a un párrafo de §1).
+de PF/RD/FT (al paper largo) · amenazas a la validez (a §4.4) · el relato de la
+versión superada (a un párrafo de §1).
 
-Se conservan la figura del pico y tres tablas: eje, predictores y codificador.
-Estimación **7,3–7,6 páginas** sin referencias; no compilado.
+**Compila.** La primera compilación en Overleaf dio **8 páginas**, y de ahí
+salieron dos recortes:
+
+- **Fuera §3.6, la secuencia k=4.** Ganancia **neta cero**: las ~50 palabras que
+  libera se van en declarar la limitación que ese resultado cubría — sin él, el
+  paper solo enseña un cambio de tarea, y eso hay que decirlo. Lo único que
+  ahorra es el título de subsección. Se conserva el crédito: la limitación
+  apunta a que el resultado de k=4 existe y está reportado en el paper largo.
+- **Fuera la tabla del codificador**, sustituida por la frase que sostenía. Un
+  tercio de página, y sus dos números (811 y 800) ya estaban en la prosa; se
+  añadió el rango que solo daba la tabla (1.00 a 848) y un puntero a los
+  resultados publicados. **Esta sí mueve: −0,4 páginas.**
+
+Quedan la figura del pico y **dos tablas**: eje y predictores. Estimación
+**6,97 páginas** sin referencias, o sea ~1 de margen. Si sobra sitio, lo primero
+que devolvería es la tabla del codificador: es la evidencia visual del segundo
+hallazgo.
+
+### Tres trampas de Overleaf, ya resueltas
+
+Overleaf compila **desde la raíz del proyecto**, no desde la carpeta del fichero
+principal. Con `paper/` subida entera eso rompía la versión corta:
+
+1. **Rutas.** `../tables/…` salía fuera del proyecto. Resuelto con un prefijo
+   que se autodetecta: `\IfFileExists{tables/tab_axis.tex}` decide si
+   `\wmfroot` es vacío o `../`, así que **el mismo fichero compila desde
+   `paper/` y desde `paper/workshop/`** sin duplicar las tablas.
+2. **Documento principal.** Hay dos `main.tex` y Overleaf elige uno solo.
+   Menu → Settings → Main document → `workshop/main.tex`.
+3. **La bibliografía no salía.** `ibliography{\wmfroot refs}` no funciona:
+   ese nombre llega a **bibtex**, que no expande macros de LaTeX ni abre rutas
+   que salgan del directorio de compilación. Es `ibliography{refs}`, correcto
+   siempre que se compile desde `paper/` — que es lo que hace Overleaf.
+
+`check-paper.py` sigue el macro y prueba cada expansión antes de dar por rota
+una ruta, así que no protesta por el prefijo.
 
 ### Trampas al escribir (todas se han pisado ya una vez)
 
@@ -517,10 +551,10 @@ del autor: quitarlo es borrar una subsección.
 
 **Por orden, y con fecha encima.**
 
-1. **Compilar la versión corta.** El paper largo ya está compilado y
-   verificado; lo que falta es saber si la de 8 páginas cabe de verdad
-   (estimación 7,3–7,6, sin comprobar). Sigue sin haber LaTeX aquí. Requiere
-   `booktabs`.
+1. **Recompilar la versión corta y confirmar el margen.** Compiló a 8 páginas
+   antes de los dos recortes; la estimación tras ellos es **6,97**. Sigue sin
+   haber LaTeX en esta máquina: se compila en Overleaf, subiendo `paper/` y
+   fijando `workshop/main.tex` como documento principal.
 
    ```bash
    cd C:/Users/Usuario/WorldModelsBenchmark && python _devlog/check-paper.py

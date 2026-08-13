@@ -1188,3 +1188,50 @@ el escapado sino el encadenado: **un mensaje de commit es una afirmación sobre
 el árbol, y este se verificó después de publicarlo**. En un repo público eso
 deja un mensaje incorrecto en la historia para siempre. Separar la escritura de
 la verificación y del commit.
+
+---
+
+## Sesión 14 — La versión corta compila, y dos recortes
+
+### Overleaf: tres cosas que la rompían
+
+Overleaf compila **desde la raíz del proyecto**, no desde la carpeta del fichero
+principal, y con `paper/` subida entera eso rompía la versión de 8 páginas.
+
+1. **Rutas.** `../tables/…` apuntaba fuera del proyecto. Resuelto con un prefijo
+   autodetectado: `\IfFileExists{tables/tab_axis.tex}` decide si `\wmfroot` es
+   vacío o `../`. El mismo fichero compila desde `paper/` y desde
+   `paper/workshop/`, **sin duplicar las tablas** en el subdirectorio.
+2. **Documento principal.** Hay dos `main.tex`; hay que fijarlo a mano en
+   Menu → Settings → Main document.
+3. **La bibliografía no salía**, y fue error mío: `\bibliography{\wmfroot refs}`
+   no puede funcionar. Ese nombre llega a **bibtex** por el `.aux`, y bibtex no
+   expande macros de LaTeX ni abre rutas que salgan del directorio de
+   compilación. Queda `\bibliography{refs}`, correcto compilando desde `paper/`.
+   La alternativa —copiar `refs.bib` dentro de `workshop/`— arreglaba lo mismo
+   creando dos bibliografías que pueden divergir.
+
+`check-paper.py` aprende a seguir el macro: prueba cada expansión que el
+documento define antes de dar por rota una ruta.
+
+### Los recortes, y lo que costó cada uno
+
+La primera compilación dio **8 páginas**, justo en el límite y sin sitio para las
+referencias.
+
+- **§3.6, la secuencia k=4: ganancia neta cero.** Libera ~50 palabras y obliga a
+  gastar ~46 en declarar la limitación que ese resultado cubría — sin él el
+  paper solo enseña un cambio de tarea, y callarlo en un workshop de continual
+  learning no es una opción. Lo único que ahorra es el título de subsección.
+- **La tabla del codificador: −0,4 páginas.** Un tercio de página con su
+  caption, y sus dos números (811 y 800) ya estaban en la prosa. Sustituida por
+  la frase que sostenía, más el rango que solo daba la tabla (1.00 a 848) y un
+  puntero a los resultados publicados.
+
+Quedan la figura del pico y dos tablas (eje, predictores). Estimación **6,97
+páginas** sin referencias, contra 7,38 antes: **~1 página de margen**.
+
+**Lección para el próximo recorte:** quitar una sección que responde a una
+objeción no ahorra lo que ocupa, porque la objeción vuelve y hay que declararla.
+Lo que ahorra de verdad es material redundante — una tabla cuyos números ya
+están en el texto.

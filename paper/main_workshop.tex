@@ -1,11 +1,10 @@
 % Eight-page version for CL4FMAgents @ NeurIPS 2026 (deadline 29 Aug 2026, AoE).
 %
-% A SEPARATE document, not a variant of ../main.tex: at 8 pages the full
-% paper's 12,300 words do not survive as a subset, so this was rewritten rather
-% than cut. What follows the long version exactly is the numbers -- the tables
-% are the same generated files, pulled from ../tables/, and every figure in the
-% prose is one that appears in them or was verified against results/ during the
-% number pass.
+% A SEPARATE document, not a variant of main.tex: at 8 pages the full paper's
+% 12,300 words do not survive as a subset, so this was rewritten rather than
+% cut. What follows the long version exactly is the numbers -- the tables are
+% the same generated files under tables/, and every figure in the prose is one
+% that appears in them or was verified against results/ during the number pass.
 %
 % Dropped, and where the reader is sent instead:
 %   - Related work as a section       -> one paragraph in Section 1
@@ -15,15 +14,16 @@
 %   - Threats to validity as a section-> Section 4.4
 %   - The superseded version's account-> one paragraph in Section 1
 %
-% Compile FROM paper/, not from this directory, so that bibtex can open
-% refs.bib -- it refuses paths that climb out of the compile directory, and
-% \wmfroot below cannot help it because bibtex does not expand LaTeX macros:
+% It lives beside refs.bib, tables/ and figures/ on purpose. It started in a
+% workshop/ subdirectory and that cost three separate build failures: \input
+% paths that climbed out of the project, a main document Overleaf would not
+% pick on its own, and a bibliography bibtex would not open because the .bib
+% name reached it through a LaTeX macro. Every path here is now plain and
+% relative to this directory, which is where Overleaf and a local run both
+% compile from. Do not move this file back into a subdirectory.
 %
-%   cd paper && pdflatex workshop/main && bibtex workshop/main \
-%     && pdflatex workshop/main && pdflatex workshop/main
-%
-% Overleaf already compiles from the project root, so uploading paper/ and
-% setting workshop/main.tex as the main document is the same thing.
+%   cd paper && pdflatex main_workshop && bibtex main_workshop
+%   cd paper && pdflatex main_workshop && pdflatex main_workshop
 
 \documentclass[11pt]{article}
 
@@ -37,14 +37,7 @@
 \usepackage[numbers]{natbib}
 \usepackage[hidelinks]{hyperref}
 
-% Where paper/ sits, seen from wherever LaTeX was started. Compiled locally in
-% this directory it is one level up; compiled by Overleaf, which runs from the
-% project root with this file as the main document, it is the current
-% directory. Probing for a file that only exists under paper/ settles it, so
-% the same source builds either way and nothing has to be duplicated here.
-\IfFileExists{tables/tab_axis.tex}{\def\wmfroot{}}{\def\wmfroot{../}}
-
-\graphicspath{{\wmfroot figures/}{figures/}{../figures/}}
+\graphicspath{{figures/}}
 
 \title{Forgetting in World Models Does Not Follow Task Distance:\\
        \large A Component-Level Benchmark and Two Negative Results}
@@ -225,7 +218,7 @@ all $2^n$ sign flips; at $n = 10$ its floor is $p \approx 0.002$.
 
 \begin{table}[t]
   \centering
-  \input{\wmfroot tables/tab_axis}
+  \input{tables/tab_axis}
   \caption{Figure~\ref{fig:axis} as numbers: RD by family and labelled level,
   aggregated over the four methods sharing the RSSM architecture (median over
   methods of each method's median over seeds).}
@@ -261,7 +254,7 @@ between the two cells falling from $2.01$ to $1.42$.
 
 \begin{table}[t]
   \centering
-  \input{\wmfroot tables/tab_predictors}
+  \input{tables/tab_predictors}
   \caption{The nine cells behind the rank correlations, and the correlations.
   Task-B difficulty is the held-out reconstruction error a model reaches on
   task~B after training on it.}
@@ -455,11 +448,6 @@ ones. A cell re-executed eight days after its original run reproduced to the
 fourth decimal.
 
 \bibliographystyle{plainnat}
-% Not \wmfroot here. The prefix is for LaTeX, which expands macros; this name
-% reaches bibtex through the .aux file, and bibtex refuses to open a path that
-% climbs out of the compile directory. Compiling from paper/ -- which is what
-% Overleaf does, and what the header tells a local build to do -- makes the
-% bare name correct and leaves the .bib single-sourced.
 \bibliography{refs}
 
 \end{document}

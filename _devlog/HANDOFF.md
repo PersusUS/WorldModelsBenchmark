@@ -1,12 +1,12 @@
 # WMF Benchmark — Traspaso
 
 Documento autocontenido para retomar el proyecto en una sesión nueva.
-Última actualización: **12 ago 2026, fin de sesión 12 — repositorio público, PDF revisado, y la versión de 8 páginas escrita para CL4FMAgents.**
+Última actualización: **14 ago 2026, fin de sesión 13 — PDF recompilado y verificado, README reescrito. Solo queda enviar.**
 
 > **Lectura mínima para arrancar:** §0 (estado), §1 (qué es), §3 (el paper) y
 > §4 (qué hacer ahora). El resto es referencia que se consulta, no se lee.
 
-## 0. Estado en una pantalla (12 ago 2026)
+## 0. Estado en una pantalla (14 ago 2026)
 
 **No queda trabajo de investigación. Queda enviar, y hay una fecha.**
 
@@ -24,10 +24,19 @@ sesión.
 (los `.md` y los scripts; fuera quedan `archive/`, logs y volcados
 regenerables).
 
-**Revisado el PDF compilado**, que nadie había mirado. Las 26 páginas tienen
-todo el texto dentro de la caja y nueve de las diez tablas también; **la Tabla 1
-se salía 2,2 pt** y está corregida en el `.tex` (relleno de columna 4 pt → 3 pt).
-**Sin recompilar**: `paper/WMF.pdf` conserva el desborde.
+**El PDF está compilado y verificado.** Nadie lo había mirado hasta la sesión
+12: entonces la Tabla 1 se salía 2,2 pt (siete columnas; sobresalían las reglas
+de `booktabs`, no el texto). Corregido bajando el relleno de columna de 4 pt a
+3 pt, **recompilado el 13 ago y vuelto a medir**: 26 páginas, **cero líneas y
+cero reglas fuera de la caja**, y la Tabla 1 sigue completa —los siete entornos
+y las nueve `d_trans`— pese a estrecharla. Las cifras corregidas siguen dentro
+(88.5, 58.79, 2.01, 14.8, 8135) y las viejas no (78–97, 1.96, 15×).
+
+**El README está reescrito** para un repo público con un paper dentro. Abría
+describiendo el protocolo, decía «225 runs» y «291 tests», y su sección de
+resultados rezaba «Not yet published — results are being regenerated». Ahora
+abre con los dos hallazgos y sus cifras, enlaza el PDF, y sus recuentos son los
+de hoy.
 
 - **375 celdas ejecutadas y commiteadas.** 75 parejas de referencia, 0 pasos con
   NaN, un solo protocolo (5000 pasos), cada resultado con su par de tareas.
@@ -508,10 +517,10 @@ del autor: quitarlo es borrar una subsección.
 
 **Por orden, y con fecha encima.**
 
-1. **Compilar las dos versiones.** Sigue sin haber LaTeX aquí, y ahora hay dos
-   cosas que dependen de ello: el arreglo de la Tabla 1 en el paper largo, y
-   saber si la versión corta cabe de verdad en ocho páginas (estimación
-   7,3–7,6, sin comprobar). Requiere `booktabs`.
+1. **Compilar la versión corta.** El paper largo ya está compilado y
+   verificado; lo que falta es saber si la de 8 páginas cabe de verdad
+   (estimación 7,3–7,6, sin comprobar). Sigue sin haber LaTeX aquí. Requiere
+   `booktabs`.
 
    ```bash
    cd C:/Users/Usuario/WorldModelsBenchmark && python _devlog/check-paper.py

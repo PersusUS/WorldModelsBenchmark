@@ -1143,3 +1143,48 @@ presupuesto (30.86/24.71 → 57.30/71.51) y la prueba de escalado
 bien. Las cuatro erratas estaban las cuatro en su lista CHECK, y ninguna se
 habría detectado sin recalcular. Conviene recordarlo la próxima vez que se
 regeneren tablas y se dé por buena la prosa.
+
+---
+
+## Sesión 13 — PDF recompilado y verificado, README reescrito
+
+### El desborde de la Tabla 1, cerrado
+
+Recompilado el paper (13 ago) con el relleno de columna a 3 pt y vuelto a medir
+sobre el PDF, caja por caja: **26 páginas, cero líneas y cero reglas de
+`booktabs` fuera del bloque de texto**. La Tabla 1 sigue completa pese a
+estrecharla —los siete entornos y las nueve `d_trans`— y las cifras corregidas
+en la sesión 10 siguen dentro (88.5, 58.79, 2.01, 14.8, 8135), mientras que las
+viejas no aparecen (78–97, 1.96, 15×).
+
+### `README.md` reescrito
+
+Estaba escrito para un repo privado con la corrida recién invalidada: abría
+describiendo el protocolo, decía «225 runs» y «291 tests», y su sección de
+resultados rezaba **«Not yet published — results are being regenerated»**. El
+repo lleva dos días público con un paper de 26 páginas dentro.
+
+- Abre con **los dos hallazgos y sus cifras**, y enlaza `paper/WMF.pdf` en la
+  primera pantalla.
+- Recuentos al día: 375 corridas, 75 parejas de referencia, diez semillas en las
+  seis celdas que discriminan, 434 tests. El layout menciona `results-2x/`,
+  `results-seq/` y `paper/`.
+- Tres correcciones dentro de lo que ya había: **los checkpoints no se
+  escriben** (decía que se escribían y se ignoraban en git), el suelo del test
+  exacto es **0.002** a diez semillas y no 0.0625, y la cita lleva el título
+  actual.
+- Se conservan la sección de determinismo, las definiciones de métricas con su
+  alcance declarado, y las ocho limitaciones conocidas.
+
+### Un fallo de método que conviene no repetir
+
+El commit del README **se subió afirmando que la cita llevaba el título nuevo, y
+no era cierto**: la edición falló por un error de escapado, el script murió
+después de escribir el resto del fichero, y el `git commit` se ejecutó igual
+porque iba encadenado en la misma orden.
+
+Corregido en el commit siguiente, que lo dice explícitamente. La lección no es
+el escapado sino el encadenado: **un mensaje de commit es una afirmación sobre
+el árbol, y este se verificó después de publicarlo**. En un repo público eso
+deja un mensaje incorrecto en la historia para siempre. Separar la escritura de
+la verificación y del commit.

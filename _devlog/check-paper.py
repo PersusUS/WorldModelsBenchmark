@@ -93,8 +93,23 @@ def main():
         # ../tables/tab_axis and is right to.
         here = (PAPER / name).parent
 
+        # A path may be written through a macro, because Overleaf compiles from
+        # the project root while a local run compiles from the file's own
+        # directory, and one source has to satisfy both. Try every expansion
+        # the document defines for it and accept the path if any of them lands.
+        macros = dict(re.findall(r"\\def\\(\w+)\{([^}]*)\}", text))
+
+        def expansions(target):
+            found = re.match(r"\\(\w+)\s*(.*)", target)
+            if not found or found.group(1) not in macros:
+                return [target]
+            rest = found.group(2)
+            return [macros[found.group(1)] + rest, rest, "../" + rest]
+
         for target in re.findall(r"\\input\{([^}]*)\}", text):
-            if not (here / f"{target}.tex").exists():
+            if not any((here / f"{option}.tex").exists()
+                       or (PAPER / f"{option}.tex").exists()
+                       for option in expansions(target)):
                 problems.append(f"{name}: \\input{{{target}}} has no file")
         # \includegraphics is normally written without an extension so LaTeX
         # can pick pdf over png; accept the file under any of them. Search the

@@ -29,7 +29,14 @@
 \usepackage[numbers]{natbib}
 \usepackage[hidelinks]{hyperref}
 
-\graphicspath{{../figures/}}
+% Where paper/ sits, seen from wherever LaTeX was started. Compiled locally in
+% this directory it is one level up; compiled by Overleaf, which runs from the
+% project root with this file as the main document, it is the current
+% directory. Probing for a file that only exists under paper/ settles it, so
+% the same source builds either way and nothing has to be duplicated here.
+\IfFileExists{tables/tab_axis.tex}{\def\wmfroot{}}{\def\wmfroot{../}}
+
+\graphicspath{{\wmfroot figures/}{figures/}{../figures/}}
 
 \title{Forgetting in World Models Does Not Follow Task Distance:\\
        \large A Component-Level Benchmark and Two Negative Results}
@@ -210,7 +217,7 @@ all $2^n$ sign flips; at $n = 10$ its floor is $p \approx 0.002$.
 
 \begin{table}[t]
   \centering
-  \input{../tables/tab_axis}
+  \input{\wmfroot tables/tab_axis}
   \caption{Figure~\ref{fig:axis} as numbers: RD by family and labelled level,
   aggregated over the four methods sharing the RSSM architecture (median over
   methods of each method's median over seeds).}
@@ -246,7 +253,7 @@ between the two cells falling from $2.01$ to $1.42$.
 
 \begin{table}[t]
   \centering
-  \input{../tables/tab_predictors}
+  \input{\wmfroot tables/tab_predictors}
   \caption{The nine cells behind the rank correlations, and the correlations.
   Task-B difficulty is the held-out reconstruction error a model reaches on
   task~B after training on it.}
@@ -295,7 +302,7 @@ simultaneously carries the highest RD in its family.
 
 \begin{table}[t]
   \centering
-  \input{../tables/tab_encoder}
+  \input{\wmfroot tables/tab_encoder}
   \caption{Held-out task-A reconstruction error after training on task~B, as a
   factor of the same model's error before it. $1.00$ means nothing was lost.
   $\dagger$ marks control cells.}
@@ -451,6 +458,6 @@ ones. A cell re-executed eight days after its original run reproduced to the
 fourth decimal.
 
 \bibliographystyle{plainnat}
-\bibliography{../refs}
+\bibliography{\wmfroot refs}
 
 \end{document}

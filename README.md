@@ -370,9 +370,11 @@ aware of before building on it.
 
 ```bibtex
 @misc{perezbazarot2026wmf,
-  title  = {A Benchmark for Catastrophic Forgetting in World Models},
+  title  = {Forgetting in World Models Does Not Follow Task Distance:
+            A Component-Level Benchmark and Two Negative Results},
   author = {P{\'e}rez Bazarot, Jes{\'u}s},
-  year   = {2026}
+  year   = {2026},
+  note   = {Code and data: https://github.com/PersusUS/WorldModelsBenchmark}
 }
 ```
 

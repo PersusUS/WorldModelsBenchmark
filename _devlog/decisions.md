@@ -758,3 +758,24 @@ secuencia y nada más.
 reporta FT ni `d_trans`. La pregunta es si el olvido se compone a lo largo de
 una secuencia; la transferencia hacia delante ya está medida en la rejilla y
 pagarla aquí multiplicaría el coste sin responder nada nuevo.
+
+## D23 — El resultado de k=4 no entra en la versión de 8 páginas (sesión 16)
+
+**Decidido por el autor**, con el documento ya compilado en 8 páginas
+(bibliografía incluida) y el límite en 8 **excluyendo** referencias.
+
+La subsección se había quitado durante los recortes, y al confirmarse que sobraba
+sitio propuse devolverla. El autor decidió que no. Las razones se sostienen:
+
+- **No eran dos frases.** Devolverla obliga a revertir también la limitación que
+  se escribió para cubrirla —«los experimentos reportan un solo cambio de
+  tarea»— porque las dos cosas no pueden convivir sin contradecirse. El coste
+  real es un párrafo, no una línea.
+- **El margen es de décimas.** El cuerpo ronda las 7,8 de 8 con la tabla del
+  codificador dentro, y mis estimaciones de página han fallado dos veces por
+  cerca de una página, siempre por debajo.
+- **El resultado no se pierde**: está completo en el paper largo, y la
+  limitación de la versión corta apunta a él.
+
+La versión corta queda con **la figura del pico y tres tablas** (eje,
+predictores, codificador), y **k=2 declarado como alcance**.

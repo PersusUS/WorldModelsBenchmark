@@ -465,8 +465,10 @@ las ecuaciones de las métricas (descritas en palabras) · las tablas por métod
 de PF/RD/FT (al paper largo) · amenazas a la validez (a §4.4) · el relato de la
 versión superada (a un párrafo de §1).
 
-**Compila.** La primera compilación en Overleaf dio **8 páginas**, y de ahí
-salieron dos recortes:
+**Compila y cabe: 8 páginas con bibliografía**, y el límite de CL4FMAgents
+excluye las referencias. **No hay nada que recortar ni que añadir** — ver D23.
+De la primera compilación, que dio 8 páginas *sin* bibliografía, salieron dos
+recortes:
 
 - **Fuera §3.6, la secuencia k=4.** Ganancia **neta cero**: las ~50 palabras que
   libera se van en declarar la limitación que ese resultado cubría — sin él, el
@@ -478,10 +480,13 @@ salieron dos recortes:
   añadió el rango que solo daba la tabla (1.00 a 848) y un puntero a los
   resultados publicados. **Esta sí mueve: −0,4 páginas.**
 
-Quedan la figura del pico y **dos tablas**: eje y predictores. Estimación
-**6,97 páginas** sin referencias, o sea ~1 de margen. Si sobra sitio, lo primero
-que devolvería es la tabla del codificador: es la evidencia visual del segundo
-hallazgo.
+**La tabla del codificador volvió a entrar** al confirmarse el tamaño real: el
+recorte se había hecho sobre una lectura equivocada. **La sección de k=4 no
+vuelve** (D23, decisión del autor): devolverla obliga a revertir también la
+limitación escrita para cubrirla, el margen es de décimas, y el resultado está
+completo en el paper largo.
+
+Quedan la figura del pico y **tres tablas**: eje, predictores y codificador.
 
 ### Overleaf: la lección, ya cobrada
 

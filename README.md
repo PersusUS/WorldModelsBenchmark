@@ -56,6 +56,9 @@ distance. No run dropped a NaN step, and every run shares one protocol. A
 doubled-budget probe and a four-task sequence run alongside, in `results-2x/`
 and `results-seq/`.
 
+> Working on this with an AI agent? [`CLAUDE.md`](CLAUDE.md) is the map, the
+> house rules and the traps — written for an agent arriving cold.
+
 ## Repository layout
 
 ```

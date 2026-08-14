@@ -1260,3 +1260,32 @@ subdirectorio y por qué.
 **Lección:** tres síntomas distintos con la misma causa no piden tres parches,
 piden quitar la causa. Lo propuse al segundo fallo y seguí parcheando; debí
 moverlo entonces.
+
+---
+
+## Sesión 16 — Cabe, y se cierra el trabajo
+
+La versión corta compila en **8 páginas en total, bibliografía incluida**, con
+la tabla del codificador puesta. El límite de CL4FMAgents es de 8 **excluyendo**
+referencias, así que el cuerpo queda por debajo: **cumple con margen y no hay
+nada que recortar**.
+
+Recorrido del tamaño, junto porque mis estimaciones fallaron dos veces en la
+misma dirección:
+
+| Momento | Estimado | Real |
+| --- | --- | --- |
+| Primera escritura | 7,3–7,6 | 8 sin bibliografía |
+| Calibrado contra el PDF largo | 7,38 | — |
+| Sin k=4 ni tabla del codificador | 6,97 | 8 con bibliografía |
+| Con la tabla devuelta | ~7,8 de cuerpo | 8 con bibliografía |
+
+**El sesgo era sistemático, no casual:** contaba prosa por densidad más el alto
+medido de los flotantes, y nunca el espacio vertical de encabezados de sección,
+`\paragraph`, saltos de párrafo ni la recolocación de flotantes. En un documento
+de nueve secciones eso es cerca de una página. Para la próxima: **sumar ~1
+página a cualquier estimación hecha así**, o compilar y no estimar.
+
+De los dos recortes que provocó ese error, la tabla se revirtió y k=4 no — y
+k=4 no ahorraba nada de todos modos, porque obligaba a declarar la limitación
+que ese resultado cubría.

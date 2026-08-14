@@ -1,7 +1,7 @@
 # WMF Benchmark — Traspaso
 
 Documento autocontenido para retomar el proyecto en una sesión nueva.
-Última actualización: **14 ago 2026, fin de sesión 15 — la versión corta compila con bibliografía. Solo queda enviar.**
+Última actualización: **14 ago 2026, fin de sesión 16 — la versión corta cabe: 8 páginas con bibliografía. No queda trabajo, solo el envío.**
 
 > **Lectura mínima para arrancar:** §0 (estado), §1 (qué es), §3 (el paper) y
 > §4 (qué hacer ahora). El resto es referencia que se consulta, no se lee.
@@ -557,11 +557,14 @@ del autor: quitarlo es borrar una subsección.
 
 **Por orden, y con fecha encima.**
 
-1. **Confirmar el número de páginas.** La versión corta ya compila en Overleaf
-   con su bibliografía. Compilaba a 8 páginas *antes* de los dos recortes; la
-   estimación tras ellos es **6,97** y está sin confirmar. Sigue sin haber
-   LaTeX en esta máquina: se compila subiendo `paper/` a Overleaf y fijando
-   `main_workshop.tex` como documento principal.
+1. **Enviar.** La versión corta compila en Overleaf y ocupa **8 páginas en
+   total, bibliografía incluida**, con la tabla del codificador dentro. El
+   límite de CL4FMAgents es de 8 **excluyendo** referencias, así que el cuerpo
+   está por debajo y **cumple con margen**. No hay nada que recortar.
+
+   `https://openreview.net/group?id=NeurIPS.cc/2026/Workshop/CL4FMAgents`
+   Deadline **29 ago 2026 AoE**. No archival, así que no quema el paper para
+   una sede archival después (CoLLAs 2027).
 
    ```bash
    cd C:/Users/Usuario/WorldModelsBenchmark && python _devlog/check-paper.py

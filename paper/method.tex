@@ -173,8 +173,8 @@ It is a property of the task pair and the seed, not of the continual learning
 method, so it is computed once per cell and seed and all five methods read the
 same value back. The two reference models it needs are the same two that supply
 the from-scratch arm of Equation~\ref{eq:ft}, which is why measuring both cost
-one pair of extra trainings per cell and seed rather than two: 45 pairs against
-the grid's 225 runs, a 20\% surcharge.
+one pair of extra trainings per cell and seed rather than two: 75 pairs against
+the grid's 375 runs, a 20\% surcharge.
 
 Equation~\ref{eq:dtrans} carries a caveat we have not resolved, and it is the
 same one that keeps FT in pixel space. The two reference models are trained
@@ -204,8 +204,8 @@ reports where that ranking holds and where it fails.
   \caption{The nine cells, read from the stored results rather than from the
   configuration files. $d_{\mathrm{param}}$ is left empty where differencing a
   physics vector would misdescribe the pair (Section~\ref{sec:method:distances});
-  $d_{\mathrm{trans}}$ is the median over five seeds and is comparable within a
-  family, not across families.}
+  $d_{\mathrm{trans}}$ is the median over the cell's seeds and is comparable
+  within a family, not across families.}
   \label{tab:tasks}
 \end{table}
 
@@ -255,12 +255,21 @@ bounds.
   estimated from per-sample gradients of $\log P_\theta(z' \mid z, a)$.
   \item \textbf{Progressive networks} \citep{rusu2016progressive} --- one GRU
   column per task, previous columns frozen, lateral projections from the last
-  frozen column into the new one.
+  frozen column into the new one. Like every method here it is evaluated
+  without a task oracle: inference runs through the newest column, since no
+  task label is available at test time to route by. This differs from the
+  original protocol, where the label selects the column --- under oracle
+  routing the frozen task-A column would score $\mathrm{PF} = 0$ by
+  construction --- and the numbers of
+  Section~\ref{sec:results:methods} are statements about the task-agnostic
+  reading.
   \item \textbf{UG-MTM} --- our own method: the deterministic transition is
   replaced by a pool of four GRU experts \citep{shazeer2017moe} gated by an
-  MC-dropout estimate of epistemic uncertainty \citep{gal2016dropout}, and the
-  VAE is frozen after task~A. It is included as one of five methods, not as the
-  paper's result.
+  MC-dropout estimate of epistemic uncertainty \citep{gal2016dropout}. After
+  task~A the VAE and the $\mu/\sigma$ projection head are frozen along with the
+  previous experts, so only the newly activated expert, the uncertainty head
+  and the threshold network train on task~B. It is included as one of five
+  methods, not as the paper's result.
 \end{itemize}
 
 Two properties of EWC's penalty follow from its definition and are worth naming

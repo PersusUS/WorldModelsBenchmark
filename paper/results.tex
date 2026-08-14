@@ -308,8 +308,12 @@ other methods, so the protection is not uniform across families either.
 \paragraph{Progressive networks are the only baseline with consistently
 positive PF} in MiniGrid ($4.06$, $6.10$, $14.43$), i.e.\ the benchmark scores
 them as forgetting more of the transition component, not less --- while their
-encoder degrades like fine-tuning's. Column capacity does not help a component
-that is not the one being overwritten.
+encoder degrades like fine-tuning's. The number reads on the task-agnostic
+protocol declared in Section~\ref{sec:method:methods}: evaluation routes
+through the active column because no task label is available at test time,
+whereas oracle routing through the frozen task-A column would put PF at zero
+by construction. Under task-agnostic inference, column capacity does not help
+a component that is not the one being overwritten.
 
 \paragraph{UG-MTM does not forget because it does not learn.} Its encoder factor
 is exactly $1.00$ in all nine cells --- it is frozen, so task-A reconstruction is

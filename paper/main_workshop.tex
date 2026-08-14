@@ -315,7 +315,7 @@ Section~\ref{sec:benchmark} declared. Fine-tuning's held-out task-A
 reconstruction grows by a factor of $811$ in MiniGrid at minimum distance while
 its PF for that cell is $-5.58$: measured in the frozen latent basis, the model
 \emph{improved}. This is not an isolated sign error --- fine-tuning's PF is
-negative in eight of the nine cells while its encoder is destroyed in six.
+negative in seven of the nine cells while its encoder is destroyed in six.
 
 EWC makes the dissociation sharpest, and it was derived before it was measured.
 Its Fisher information is defined over $\log P(z' \mid z, a)$, in which no
@@ -324,7 +324,7 @@ quadratic penalty cannot constrain them even in principle. Both halves hold:
 EWC preserves the transition component almost perfectly ($-0.03$) while its
 encoder degrades by a factor of $800$, marginally worse than the unregularised
 baseline. Replay is the only method that keeps both, its task-A reconstruction
-never growing by more than $27\%$.
+never growing by more than $31\%$.
 
 The lesson generalises past our metrics: \textbf{any latent-space forgetting
 metric evaluated on frozen representations measures the component it was

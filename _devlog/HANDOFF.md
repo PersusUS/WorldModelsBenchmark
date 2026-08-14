@@ -1,14 +1,41 @@
 # WMF Benchmark — Traspaso
 
 Documento autocontenido para retomar el proyecto en una sesión nueva.
-Última actualización: **14 ago 2026, fin de sesión 16 — la versión corta cabe: 8 páginas con bibliografía. No queda trabajo, solo el envío.**
+Última actualización: **14 ago 2026, fin de sesión 17 — ENVIADO a CL4FMAgents. Una auditoría externa corrigió tres cifras rancias y declaró dos elecciones de protocolo antes de enviar. Lo siguiente no es trabajo, es esperar al 29 sep.**
 
 > **Lectura mínima para arrancar:** §0 (estado), §1 (qué es), §3 (el paper) y
 > §4 (qué hacer ahora). El resto es referencia que se consulta, no se lee.
 
 ## 0. Estado en una pantalla (14 ago 2026)
 
-**No queda trabajo de investigación. Queda enviar, y hay una fecha.**
+**Enviado el 14 ago 2026 a CL4FMAgents @ NeurIPS 2026** (deadline era el 29 ago
+AoE, no archival). Notificación el **29 sep**; taller el 11–12 dic en Sídney.
+No queda trabajo de investigación ni de escritura: queda esperar, y decidir si
+se manda también a CWM (deadline 30 ago) antes de que pase la fecha.
+
+**Lo que la auditoría de la sesión 17 cambió, todo antes del envío y sin tocar
+un solo número de las tablas** (commits `f822fc7`, `dabe254`, `04beb69`,
+`1d12cd2`, `79c2e82`): el PF de finetuning es negativo en **siete** de nueve
+celdas, no ocho —lo decían mal la versión corta y `discussion.tex`, y la tabla
+generada siempre dijo siete—; el peor crecimiento de replay es **31%**, no 27%;
+las parejas de referencia son **75 contra 375 corridas**, no 45 contra 225; un
+`\ref` de `discussion.tex` llevaba un byte CR en vez de la barra y el PDF de 26
+páginas renderizaba «Section efsec:discussion:methods». Y dos declaraciones que
+el paper debía y no daba: **progressive nets se evalúa sin oráculo de tarea**
+(con oráculo, la columna A congelada daría PF = 0 por construcción, así que el
+PF positivo es una afirmación sobre inferencia task-agnostic), y **UG-MTM
+congela también la cabeza μ/σ** además del VAE, que es lo que `switch_task`
+hizo siempre. La afiliación pasó a Universidad de Sevilla, que es la del perfil
+de OpenReview.
+
+**El entorno estaba roto y se arregló:** había `numpy 2.4.6` contra el
+`numpy==1.26.4` que fija `requirements.txt`, y torch 2.3.1 lanzaba «Numpy is
+not available» en `from_numpy` — 22 tests caídos, cero celdas reproducibles.
+Con la versión fijada vuelven los **399 tests** de la suite rápida. Ojo para el
+futuro: los 375 resultados se produjeron con **torch 2.3.1**, y
+`requirements.txt` fija **2.1.2**; ningún `metrics.json` guarda versiones de
+librería, así que la reproducibilidad bit a bit está verificada en esta máquina
+y no garantizada en otra.
 
 **Deadline: 29 ago 2026 AoE — CL4FMAgents @ NeurIPS 2026.** Ocho páginas sin
 referencias, no archival, notificación el 29 sep, taller el 11–12 dic en
@@ -562,29 +589,17 @@ del autor: quitarlo es borrar una subsección.
 
 **Por orden, y con fecha encima.**
 
-1. **Enviar.** La versión corta compila en Overleaf y ocupa **8 páginas en
-   total, bibliografía incluida**, con la tabla del codificador dentro. El
-   límite de CL4FMAgents es de 8 **excluyendo** referencias, así que el cuerpo
-   está por debajo y **cumple con margen**. No hay nada que recortar.
-
+1. **HECHO — enviado a CL4FMAgents el 14 ago 2026.**
    `https://openreview.net/group?id=NeurIPS.cc/2026/Workshop/CL4FMAgents`
-   Deadline **29 ago 2026 AoE**. No archival, así que no quema el paper para
-   una sede archival después (CoLLAs 2027).
+   Ocho páginas con bibliografía incluida, y el límite excluye referencias, así
+   que cumple con margen. No archival: **no quema el paper para CoLLAs 2027**.
+   Notificación el **29 sep 2026**.
 
-   ```bash
-   cd C:/Users/Usuario/WorldModelsBenchmark && python _devlog/check-paper.py
-   ```
-
-   Si la corta se pasa, lo que sobra por orden de menor daño: §3.6 (la
-   secuencia k=4), y después la tabla del codificador, que se puede contar en
-   prosa.
-
-2. **Enviar a CL4FMAgents antes del 29 ago AoE.**
-   `https://openreview.net/group?id=NeurIPS.cc/2026/Workshop/CL4FMAgents`
-   Al ser no archival no quema el paper para una sede archival después.
-
-3. **Mirar si CWM publicó bases** (deadline 30 ago). Encaja por título mejor
-   que ninguno; al cierre de la sesión 12 su web no daba páginas ni formato.
+2. **Mirar si CWM publicó bases** (deadline 30 ago), y decidir. Encaja por
+   título mejor que ninguno; al cierre de la sesión 12 su web no daba páginas
+   ni formato. Es la única fecha viva ahora mismo, y se pasa en dos semanas.
+   Enviar a los dos sitios es legítimo mientras los dos sean no archival —
+   confirmar que CWM lo es antes de mandar nada.
 
 4. **Después: CoLLAs 2027**, que es archival y la sede natural del tema.
    Deadline sin anunciar; por los años anteriores, finales de febrero.

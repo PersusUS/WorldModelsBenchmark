@@ -612,6 +612,18 @@ del autor: quitarlo es borrar una subsección.
 7. **Una figura de calidad-en-A.** El apéndice lleva la tabla; la figura no
    existe. No necesita entrenar nada.
 
+### Lo primero para una sede archival (CoLLAs), y solo eso
+
+8. **F30 — contrabalancear el orden de la secuencia k=4.** El pico en la tercera
+   tarea se midió con **un solo orden**, así que «posición 3» y «FourRooms»
+   (la tarea más difícil, 47.32) son la misma columna: §5.7 no distingue entre
+   el olvido siguiendo a la demanda de la tarea y el olvido dependiendo del
+   número de cambios. Se arregla con una config nueva por orden y ningún cambio
+   de código; el orden que discrimina es el que pone FourRooms en la **segunda**
+   posición, porque solo ahí el pico baja dos veces. 25 corridas por orden, en
+   la familia barata. Detalle y predicción escrita en `findings.md` (F30).
+   **No afecta a lo enviado al taller** — k=4 no está en las 8 páginas (D23).
+
 ### Después, y solo si el paper vuelve con revisiones
 
 8. **F19** — si las métricas de UG-MTM se promedian sobre varias evaluaciones.

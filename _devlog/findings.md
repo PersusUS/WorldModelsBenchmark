@@ -1479,3 +1479,90 @@ concreto salga tocado.
 
 Corregido en `results.tex` §5.2 y §5.3, `discussion.tex` §6.1 y §6.2, y en las
 amenazas a la validez.
+
+---
+
+## F30 — El pico de k=4 confunde posición con identidad de tarea · ABIERTO (no toca el paper enviado; es el experimento para CoLLAs)
+
+Salió de la auditoría externa de la sesión 17, leyendo §5.7 con ojos de revisor.
+No es un defecto de instrumento como F0–F26 ni una limitación declarada como
+F28/F29: es **un experimento que falta**, y es el más barato que queda.
+
+### Qué dice hoy el paper
+
+`results.tex` §5.7 reporta que el olvido de `T_1` **hace pico en la tercera
+tarea y remite en la cuarta**, en las cinco semillas de cada uno de los tres
+métodos que no protegen el codificador, y no lo hace en los dos que sí. El
+argumento textual es:
+
+> «A peak across levels can be attributed to how the levels were constructed. A
+> peak across position, inside one sequence, cannot.»
+
+La explicación que se ofrece es la fila de dificultad: `T_3` (FourRooms) es la
+tarea más difícil de ajustar de la secuencia — **47.32**, frente a 32.58 de
+`T_4` (KeyCorridor) y 2.60 de `T_2` (Empty-8x8).
+
+### El agujero
+
+R20 ejecutó **un solo orden**: `Empty-5x5 → Empty-8x8 → FourRooms →
+KeyCorridorS3R1`. Con un único orden, «posición 3» y «FourRooms» son la misma
+columna de datos. La frase de arriba está mal enunciada: un pico sobre posición
+en una sola secuencia **tampoco** distingue entre
+
+1. el olvido sigue a la demanda de la tarea que se aprende (la cuenta de F27), y
+2. el olvido depende del número de cambios de tarea, con un tercer cambio
+   especial por lo que sea (saturación del buffer, del Fisher, de las columnas).
+
+La partición entre métodos —que el pico aparezca solo donde el codificador está
+desprotegido— **descarta ruido, no el confundido**: dice que algo se mueve, no
+qué lo indexa.
+
+### El experimento que lo resuelve, y su predicción
+
+Contrabalancear el orden. `T_1` se queda fijo en `Empty-5x5`, porque es la tarea
+cuya retención se mide y cambiarla haría incomparables las curvas; se permutan
+las posiciones 2–4 para que la tarea difícil caiga en sitios distintos:
+
+| Orden | Secuencia | FourRooms en |
+| --- | --- | --- |
+| A (=R20) | Empty-5x5 → Empty-8x8 → FourRooms → KeyCorridor | posición 3 |
+| B | Empty-5x5 → FourRooms → Empty-8x8 → KeyCorridor | posición 2 |
+| C | Empty-5x5 → Empty-8x8 → KeyCorridor → FourRooms | posición 4 |
+
+**Predicción escrita antes de correr nada:** si la cuenta de F27 es correcta, el
+pico de RD(`T_1`) **sigue a FourRooms** — aparece tras la etapa 2 en el orden B y
+tras la 4 en el C. Si se queda clavado en la posición 3 en los tres órdenes, la
+lectura de §5.7 es falsa y hay que retirarla.
+
+**El orden B es el que discrimina; el C solo no vale.** Con tres puntos de
+medida (tras `T_2`, `T_3`, `T_4`), un pico en la última etapa es
+indistinguible de una acumulación monótona. El orden B produce la forma que
+ningún relato de acumulación puede imitar: sube en la etapa 2 y **baja** dos
+veces seguidas.
+
+### Coste
+
+Una permutación = lo mismo que R20: 25 corridas (5 métodos × 5 semillas), 100
+entrenamientos a 5000 pasos, en MiniGrid, que es la familia barata. El runner ya
+acepta todo lo necesario y **no hay que tocar código**: una config nueva por
+orden y un directorio de resultados por orden.
+
+```bash
+python experiments/run_sequence.py --config configs/benchmark/minigrid_sequence_B.yaml --results-dir results-seq-B
+```
+
+La config nueva se copia de `minigrid_sequence.yaml` reordenando la lista
+`tasks:`, y el bloque `protocol:` se deja **idéntico** — es la razón por la que
+ese bloque está duplicado y no compartido (ver la nota en el propio fichero).
+
+### Por qué importa para CoLLAs y no para el taller
+
+En la versión de 8 páginas la secuencia k=4 no aparece (D23), así que **esto no
+afecta a lo enviado**. En el paper largo la subsección ya se presenta como
+comprobación de consistencia y no como confirmación independiente, así que
+tampoco es una afirmación falsa hoy. Lo que cambia con el contrabalanceo es la
+categoría del resultado: de «el mecanismo también predice lo que pasa a k=4» a
+«el olvido sigue a la tarea, no a la posición», que es un resultado por derecho
+propio y sobre un eje —la posición dentro de una secuencia— que no se puede
+achacar a cómo se construyeron los niveles. Es lo más barato que sube el paper
+de un resultado y medio a dos.
